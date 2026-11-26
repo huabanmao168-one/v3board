@@ -10,8 +10,9 @@ if ! command -v git &> /dev/null; then
     exit 1
 fi
 
-git config --global --add safe.directory $(pwd)
-git fetch --all && git reset --hard origin/master && git pull origin master
+repository="${V3BOARD_UPDATE_REPOSITORY:-https://github.com/huabanmao168-one/v3board.git}"
+git fetch "$repository" main || exit 1
+git merge --ff-only FETCH_HEAD || exit 1
 rm -rf composer.lock composer.phar
 wget https://github.com/composer/composer/releases/latest/download/composer.phar -O composer.phar
 php composer.phar update -vvv

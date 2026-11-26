@@ -10,7 +10,7 @@
 |------|------|------|
 | 后端 | 本仓库（Laravel） | 接口、定时任务、Telegram 机器人、数据库脚本 |
 | 用户端前端 | 本仓库 `public/theme/default` | 与上游一致 |
-| 后台管理前端 | [codeman857/v2board-admin](https://github.com/codeman857/v2board-admin) | React 19 + antd 6，源码单独维护；本仓库只保存构建产物 `public/assets/admin`，由 `build-admin.sh` 生成，部署和升级都不需要 Node |
+| 后台管理前端 | [codeman857/v2board-admin](https://github.com/codeman857/v2board-admin) | React 19 + antd 6，本仓库在 admin/ 维护源码，内置构建产物 `public/assets/admin`，由 `build-admin.sh` 生成，部署和升级都不需要 Node |
 | 节点端 | [修改版 V2bX](https://github.com/wyx2685/V2bX)、[v2node](https://github.com/wyx2685/v2node) | 与上游相同 |
 
 ## 相对上游新增的功能
@@ -105,21 +105,9 @@ TelegramService 新增 MarkdownV2 安全转义（保护代码块）、统一的 
 
 ## 后台管理前端
 
-后台页面源码在 [codeman857/v2board-admin](https://github.com/codeman857/v2board-admin)，是 [sinalphabeta/v2board-admin](https://github.com/sinalphabeta/v2board-admin) 的 fork，本仓库独有的页面（风控中心、提前续期记录、订阅覆盖记录、各项新增设置等）都在那里维护。
+后台 React 源码位于 admin/，发布产物位于 public/assets/admin。GitHub Actions 在推送和 PR 时构建，并上传 v3board-admin-ui 产物。
 
-- 本仓库的 `resources/views/admin.blade.php` 只加载 `public/assets/admin/assets/admin.js`、`admin.css`，以及可选的 `public/assets/admin/custom.css`（站点自己的样式覆盖，不受版本控制）；旧的 `custom.js` 钩子已随 umi 产物一起移除，之前靠它改的东西要改到 v2board-admin 源码里
-- 静态资源的缓存版本号取 `admin.js` 与 `admin.css` 的内容哈希，前端重新构建后自动失效，不依赖后端版本号
-- 发布流程（开发机需要 Node ≥ 22.22 与 pnpm 11，服务器不需要）：
-
-```shell
-# 1. 在 v2board-admin 里改好、提交并推送
-# 2. 回到本仓库构建并放入 public/assets/admin（源码仓库有未提交改动时脚本会拒绝）
-./build-admin.sh ../v2board-admin
-# 3. 把 public/assets/admin 的变化和对应的后端改动一起提交
-```
-
-- `public/assets/admin/SOURCE` 记录产物来自哪个提交，便于对照源码；commit 带 `-dirty` 的是用 `ALLOW_DIRTY=1` 从未提交源码构建的联调产物，不要提交
-- 本地联调：在 v2board-admin 里建 `config.local.js`，`host` 指向本地后端、`secure_path` 填后台路径，然后 `pnpm dev`
+本地构建需要 Node ≥ 22.22 和 pnpm 11。提交前端源码后运行 ./build-admin.sh，再提交更新后的 public/assets/admin。服务器可直接使用已提交的静态文件。
 
 ## 安装与升级
 
@@ -131,17 +119,20 @@ TelegramService 新增 MarkdownV2 安全转义（保护代码块）、统一的 
 - Redis
 - Laravel
 
+仓库为私有仓库，部署服务器需要有读取权限。使用 SSH 部署密钥时，可通过 V3BOARD_UPDATE_REPOSITORY 指定 SSH 仓库地址。
+
 全新安装：
 
 ```shell
-sh init.sh
+git clone --branch main https://github.com/huabanmao168-one/v3board.git
+cd v3board
+bash init.sh
 ```
 
-从 xiao v2board 迁移，数据库无需任何改动：
+从兼容的 v2board Git 部署迁移，先备份数据库。更新脚本会执行数据库升级。
 
 ```shell
-git remote set-url origin https://github.com/codeman857/v3board
-git checkout master
+git remote set-url origin https://github.com/huabanmao168-one/v3board.git
 ./update.sh
 ```
 

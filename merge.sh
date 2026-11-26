@@ -4,7 +4,7 @@ set -e
 COMMON_REMOTE=v2board
 COMMON_URL=https://github.com/wyx2685/v2board.git
 COMMON_BRANCH=master
-PRIVATE_BRANCH=master
+PRIVATE_BRANCH=main
 
 echo "🚀 确认远端是否存在..."
 if ! git remote | grep -q "^$COMMON_REMOTE$"; then
