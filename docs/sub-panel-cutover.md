@@ -8,13 +8,6 @@
 
 在 http 块中配置支持 IPv4 和 IPv6 的国家数据库。若使用 Country 库，可只保留国家代码变量，并将 Region 和 City 请求头设为空字符串。已有 V3Board 安装需先运行常规数据库升级，风控记录才能保存归属地。
 
-
-ginx 配置示例
-
-
-géo
-
-
 ~~~nginx
 geoip2 /etc/nginx/geoip/GeoLite2-City.mmdb {
     auto_reload 1h;
@@ -34,6 +27,8 @@ proxy_set_header X-Subscription-Country $subscription_country;
 proxy_set_header X-Subscription-Region $subscription_region;
 proxy_set_header X-Subscription-City $subscription_city;
 ~~~
+
+客户端配置接口 /api/v1/client/app/getConfig 同样执行订阅入口校验。使用该接口的客户端也要经过可信 Nginx，并由该 location 设置真实客户端 IP 请求头。
 
 同一 Nginx 上其他转发到 V3Board 的 location 也需要覆盖或清除所有订阅归属地和来源 IP 请求头，避免客户端经另一 location 伪造头部。限制内部订阅路径只能经映射访问。
 

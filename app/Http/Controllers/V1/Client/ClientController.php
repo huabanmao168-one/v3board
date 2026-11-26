@@ -29,6 +29,9 @@ class ClientController extends Controller
             abort(403, '账号已被封禁');
         }
         $notice = SubscriptionNotice::forUser($user);
+        if ($notice === SubscriptionNotice::RESTRICTED) {
+            InsiderGuardService::recordSubscribe($user, $request, []);
+        }
         if ($notice !== null && !config('v2board.subscribe_notice_enable', 1)) {
             return response('', 403);
         }

@@ -19,7 +19,7 @@ class Client
      */
     public function handle($request, Closure $next)
     {
-        if ($request->route()->getActionMethod() === 'subscribe') {
+        if (in_array($request->route()->getActionMethod(), ['subscribe', 'getConfig'], true)) {
             SubscribeIngressService::enforce($request);
         }
 

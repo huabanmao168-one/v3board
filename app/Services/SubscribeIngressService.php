@@ -17,14 +17,11 @@ class SubscribeIngressService
         $proxies = self::entries(config('v2board.subscribe_ingress_proxies'));
         $peer = (string) $request->server('REMOTE_ADDR');
         $trusted = IpUtils::checkIp($peer, $proxies);
-        $ip = $trusted ? (string) $request->header('X-Subscription-Client-IP') : $peer;
+        $ip = $proxies ? (string) $request->header('X-Subscription-Client-IP') : (string) $request->ip();
         if ($proxies && (!$trusted || !filter_var($ip, FILTER_VALIDATE_IP))) {
             self::deny($request, $peer, 'untrusted_ingress', 404);
         }
-        if ($trusted) {
-            // Subscription logging must use the IP resolved from the trusted entry point.
-            $request->attributes->set('subscription_client_ip', $ip);
-        }
+        $request->attributes->set('subscription_client_ip', $ip);
         if (IpUtils::checkIp($ip, self::entries(config('v2board.subscribe_ingress_allow_ips')))) {
             return;
         }
@@ -36,10 +33,7 @@ class SubscribeIngressService
             self::deny($request, $ip, 'ua_blacklist');
         }
         if (config('v2board.subscribe_ingress_block_oversea')) {
-            $country = $geo['iso_code'] ?? '';
-            if ($country === '' && ($geo['country'] ?? '') === '中国') {
-                $country = 'CN';
-            }
+            $country = GeoIpService::countryCode($geo);
             if ($country === '' && $trusted) {
                 $country = strtoupper(trim((string) $request->header('X-Subscription-Country')));
             }

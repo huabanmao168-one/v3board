@@ -6,12 +6,13 @@ use App\Models\User;
 
 class SubscriptionNotice
 {
+    const RESTRICTED = '订阅已被限制，请联系管理员';
     const PASSWORD = 'subscription-notice-only';
 
     public static function forUser(User $user): ?string
     {
         if (InsiderGuardService::isRestricted((int) $user->id)) {
-            $notice = '订阅已被限制，请联系管理员';
+            $notice = self::RESTRICTED;
         } else {
             $notice = self::planNotice($user, time());
         }
@@ -20,7 +21,7 @@ class SubscriptionNotice
 
     public static function planNotice(User $user, int $now): ?string
     {
-        if (!$user->plan_id) {
+        if (!$user->plan_id && (int) $user->transfer_enable <= 0) {
             return '暂无有效套餐，请先订购';
         }
         if ($user->expired_at !== null && (int) $user->expired_at <= $now) {

@@ -55,6 +55,9 @@ class SubscribeDisplayService
         $response->setContent($body);
         $response->headers->remove('Content-Length');
         if (!empty($rule['title'])) {
+            if (!headers_sent()) {
+                header_remove('Content-Disposition');
+            }
             $response->headers->set('Content-Disposition', "attachment; filename*=UTF-8''" . rawurlencode($rule['title']));
             $response->headers->set('profile-title', 'base64:' . base64_encode($rule['title']));
         }

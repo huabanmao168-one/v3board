@@ -121,6 +121,21 @@ class GeoIpService
         return $info;
     }
 
+    public static function countryCode(array $info): string
+    {
+        $iso = strtoupper(trim($info['iso_code'] ?? ''));
+        if ($iso !== '' && $iso !== 'CN' && $iso !== 'XX') {
+            return $iso;
+        }
+        $region = implode(' ', [$info['country'] ?? '', $info['region'] ?? '', $info['province'] ?? '', $info['city'] ?? '']);
+        foreach (['HK' => '/香港|Hong\s*Kong/iu', 'MO' => '/澳门|澳門|Maca[ou]/iu', 'TW' => '/台湾|臺灣|台灣|Taiwan/iu'] as $code => $pattern) {
+            if (preg_match($pattern, $region)) {
+                return $code;
+            }
+        }
+        return $iso === 'CN' || in_array(trim($info['country'] ?? ''), ['中国', '中國', 'China'], true) ? 'CN' : '';
+    }
+
     public static function location(array $info): ?string
     {
         $parts = array_filter([$info['country'] ?? '', $info['province'] ?? '', $info['city'] ?? '', $info['district'] ?? '']);

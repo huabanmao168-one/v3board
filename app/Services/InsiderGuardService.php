@@ -160,7 +160,7 @@ class InsiderGuardService
                 'ip_address' => $ip,
                 'ip_location' => GeoIpService::location($geo) ?? SubscribeIngressService::ipLocation($request, $ip),
                 'ip_isp' => mb_substr($geo['isp'] ?? '', 0, 120) ?: null,
-                'ip_usage' => substr($geo['usage_type'] ?? '', 0, 16) ?: null,
+                'ip_usage' => mb_substr($geo['usage_type'] ?? '', 0, 16) ?: null,
                 'ua_hash' => $uaHash,
                 'times' => 1,
                 'node_count' => $nodeCount,
