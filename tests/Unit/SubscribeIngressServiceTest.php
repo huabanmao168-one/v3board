@@ -20,21 +20,22 @@ class SubscribeIngressServiceTest extends TestCase
         parent::setUp();
         $this->previousContainer = Container::getInstance();
         $this->previousFacadeApplication = Facade::getFacadeApplication();
-        $container = new Container();
-        $container->instance('config', new Repository(['v2board' => [
+
+        // Use Application instead of bare Container for storage_path() support in Laravel 13
+        $app = new \Illuminate\Foundation\Application(dirname(__DIR__, 2));
+        $app->useStoragePath(sys_get_temp_dir() . '/v3board-test-storage');
+        $app->instance('config', new Repository(['v2board' => [
             'subscribe_ingress_proxies' => '127.0.0.1',
             'subscribe_ingress_block_oversea' => 1,
         ]]));
-        $container->instance('log', new class {
+        $app->instance('log', new class {
             public function notice($message, $context): void
             {
             }
         });
-        // GeoIpService resolves the XDB location through storage_path(); no database here.
-        $container->instance('path.storage', sys_get_temp_dir() . '/v3board-test-storage');
-        Container::setInstance($container);
+        Container::setInstance($app);
         Facade::clearResolvedInstance('log');
-        Facade::setFacadeApplication($container);
+        Facade::setFacadeApplication($app);
     }
 
     protected function tearDown(): void

@@ -4,19 +4,22 @@ namespace App\Logging;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Monolog\Handler\AbstractProcessingHandler;
-use Monolog\Logger;
+use Monolog\Level;
+use Monolog\LogRecord;
 use App\Models\Log as LogModel;
 
 class MysqlLoggerHandler extends AbstractProcessingHandler
 {
-    public function __construct($level = Logger::DEBUG, bool $bubble = true)
+    public function __construct($level = Level::Debug, bool $bubble = true)
     {
         parent::__construct($level, $bubble);
     }
 
-    protected function write(array $record): void
+    protected function write(LogRecord $record): void
     {
         try{
+            $datetime = $record->datetime->getTimestamp();
+            $record = $record->toArray();
             if(isset($record['context']['exception']) && is_object($record['context']['exception'])){
                 $record['context']['exception'] = (array)$record['context']['exception'];
             }
@@ -30,8 +33,8 @@ class MysqlLoggerHandler extends AbstractProcessingHandler
                 'ip' => request()->getClientIp(),
                 'data' => json_encode($record['request_data']) ,
                 'context' => isset($record['context']) ? json_encode($record['context']) : '',
-                'created_at' => strtotime($record['datetime']),
-                'updated_at' => strtotime($record['datetime']),
+                'created_at' => $datetime,
+                'updated_at' => $datetime,
             ];
 
             LogModel::insert(

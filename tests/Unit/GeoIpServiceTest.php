@@ -3,19 +3,18 @@
 namespace Tests\Unit;
 
 use App\Services\GeoIpService;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class GeoIpServiceTest extends TestCase
 {
-    /**
-     * @dataProvider records
-     */
+    #[DataProvider('records')]
     public function testCountryCode(string $raw, string $expected): void
     {
         $this->assertSame($expected, GeoIpService::countryCode(GeoIpService::parse($raw)));
     }
 
-    public function records(): array
+    public static function records(): array
     {
         return [
             'legacy mainland' => ['中国|0|广东省|深圳市|电信', 'CN'],
