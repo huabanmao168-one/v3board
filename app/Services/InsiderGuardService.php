@@ -29,9 +29,7 @@ use Illuminate\Support\Facades\Log;
  *   - 健康探测只在状态变化时落库，状态不变时每小时补记一行
  *   - 清理任务每小时按保留天数删除过期记录
  *
- * 限制：被限制的用户账号、凭据、节点列表都不动，只是拉订阅时所有节点的入口地址换成假地址，让泄露出去的订阅拿不到真实入口；
- * 假地址在风控设置里配置，留空则按用户生成一个固定的、看起来像公网的 IPv4（240～254 开头的 IANA 保留段，全网不可路由，
- * 不会把流量打到别人的服务器上）；解除后恢复。
+ * 限制：订阅和客户端配置仅下发提示节点，解除后恢复。
  */
 class InsiderGuardService
 {
@@ -62,11 +60,6 @@ class InsiderGuardService
     const DEFAULT_RETENTION_DAYS = 3;
     const DEFAULT_HEALTH_TIMEOUT = 2;
     const DEFAULT_ALERT_COOLDOWN_MINUTES = 120;
-    // 自动生成的假入口 IPv4 的首段范围：240～254（IANA 保留，全网不可路由，外观与公网 IP 无异）
-    const DECOY_FIRST_OCTET_MIN = 240;
-    const DECOY_FIRST_OCTET_MAX = 254;
-    // 假入口要替换的字段名（不分大小写）：连接地址，以及 SNI / Host 头 / obfs host 这类能反查真实服务器的字段
-    const DECOY_FIELDS = ['host', 'server', 'address', 'server_name', 'servername', 'sni', 'obfs-host', 'obfs_host'];
     // 被限制用户的 ID 集合整体缓存（限制表很小），限制 / 解除后主动清
     const RESTRICT_CACHE_KEY = 'insider_guard_restricted_ids';
     const RESTRICT_CACHE_SECONDS = 300;
@@ -98,11 +91,11 @@ class InsiderGuardService
         self::record(self::EVENT_LOGIN, (int)$user->id, $request, null);
     }
 
-    /** 拉取订阅：记录活动，并记录「向该用户下发过哪些节点」；下发的是假入口时不算下发过 */
-    public static function recordSubscribe(User $user, Request $request, array $servers, bool $decoy = false): void
+    /** 拉取订阅：记录活动，并记录「向该用户下发过哪些节点」 */
+    public static function recordSubscribe(User $user, Request $request, array $servers): void
     {
         self::record(self::EVENT_SUBSCRIPTION, (int)$user->id, $request, count($servers));
-        if (!$decoy) self::deliveries((int)$user->id, $servers);
+        self::deliveries((int)$user->id, $servers);
     }
 
     /** 用户是否被限制；缓存或查询失败按未限制处理，不影响订阅 */
@@ -140,74 +133,6 @@ class InsiderGuardService
         Cache::forget(self::RESTRICT_CACHE_KEY);
     }
 
-    /**
-     * 假入口地址：设置里填了就用（自己的蜜罐域名或 IP）；留空则按用户生成一个固定的假 IPv4，
-     * 由用户 ID 和 APP_KEY 派生，同一用户每次拉到的都一样，不同用户不同，外人推不出来
-     */
-    public static function decoyHost(int $userId): string
-    {
-        // 配置里的 IPv6 允许带方括号，这里去掉；URI 类输出由 Helper::formatHost 补括号，QuantumultX / Surge / Loon 等行式输出不补，
-        // 所以假入口建议填 IPv4 或域名
-        $host = trim(trim((string)self::setting('decoy_host', '')), '[]');
-        if ($host !== '') return $host;
-        $hash = md5('insider_guard_decoy:' . $userId . ':' . config('app.key'));
-        $octet = function (int $index, int $min, int $max) use ($hash) {
-            return $min + hexdec(substr($hash, $index * 2, 2)) % ($max - $min + 1);
-        };
-        return $octet(0, self::DECOY_FIRST_OCTET_MIN, self::DECOY_FIRST_OCTET_MAX)
-            . '.' . $octet(1, 1, 254) . '.' . $octet(2, 1, 254) . '.' . $octet(3, 1, 254);
-    }
-
-    /**
-     * 假入口：节点列表照常，端口、凭据都不动，只换地址类字段（节点名只在与地址相同时替换）。
-     * 连接地址（host / server / address）与 SNI、Host 头、obfs host 一律换成假地址：这些字段指向真实服务器时解析即得真实 IP，
-     * 换掉没有副作用（假地址本来就连不上）；其它字符串只在与原地址相同时替换
-     */
-    public static function applyDecoy(array &$servers, int $userId): void
-    {
-        $decoy = self::decoyHost($userId);
-        $renamed = 0;
-        foreach ($servers as &$server) {
-            $originals = [];
-            foreach (['host', 'server', 'address'] as $field) {
-                $value = strtolower(trim((string)($server[$field] ?? '')));
-                if ($value !== '') $originals[$value] = true;
-            }
-            // 节点名恰好就是地址时也要换掉；多个节点都这样时加序号，避免客户端因 proxy 重名拒绝整份配置
-            $name = (string)($server['name'] ?? '');
-            if ($name !== '' && isset($originals[strtolower(trim($name))])) {
-                $renamed++;
-                $server['name'] = $decoy . ($renamed > 1 ? " {$renamed}" : '');
-            }
-            self::replaceHostDeep($server, $originals, $decoy, true);
-            // 自签证书的 pin / 证书不下发给被限制用户：证书全网唯一，拿去扫描平台可能反查到真实服务器；
-            // 自定义 ECH 的 ech_config 里明文带着 public_name，可能就是真实域名，一并去掉（各输出类没有 ech_config 时不输出 ECH）
-            if (isset($server['tls_settings']) && is_array($server['tls_settings'])) {
-                unset($server['tls_settings']['pinned_peer_cert_sha256'], $server['tls_settings']['tls_cert'], $server['tls_settings']['ech_config']);
-            }
-        }
-        unset($server);
-    }
-
-    /** $force：上层键名已命中 DECOY_FIELDS（例如 tcp + http 伪装把 Host 存成列表），里面的字符串一律替换 */
-    private static function replaceHostDeep(array &$data, array $originals, string $decoy, bool $top = false, bool $force = false): void
-    {
-        foreach ($data as $key => &$value) {
-            $field = is_string($key) ? strtolower($key) : '';
-            $hit = $force || in_array($field, self::DECOY_FIELDS, true);
-            if (is_array($value)) {
-                self::replaceHostDeep($value, $originals, $decoy, false, $hit);
-                continue;
-            }
-            // 空字符串不动（没配 SNI 就别凭空加一个）；顶层 name 是节点名，在 applyDecoy 里单独处理
-            if (!is_string($value) || $value === '' || ($top && $key === 'name')) continue;
-            if ($hit || isset($originals[strtolower(trim($value))])) {
-                $value = $decoy;
-            }
-        }
-        unset($value);
-    }
-
     /** 按小时合并写入活动表：同一桶已存在时次数 +1、更新 last_at 与节点数 */
     private static function record(string $type, int $userId, Request $request, ?int $nodeCount): void
     {
@@ -216,7 +141,7 @@ class InsiderGuardService
             $hourStart = $now - $now % self::BUCKET_SECONDS;
             // 去掉非法 UTF-8，否则 utf8mb4 列会拒绝写入
             $ua = mb_substr(mb_convert_encoding((string)($request->userAgent() ?? ''), 'UTF-8', 'UTF-8'), 0, 512);
-            $ip = substr((string)$request->ip(), 0, 45);
+            $ip = substr((string)$request->attributes->get('subscription_client_ip', $request->ip()), 0, 45);
             $uaHash = $ua === '' ? '' : md5($ua);
             // 同一小时内桶数超限（随机 UA / 伪造 IP 刷表）：后续记录并入该小时的溢出桶，只计数不再建新行、不写字典
             $buckets = DB::table('v2_insider_guard_activity')
@@ -227,11 +152,15 @@ class InsiderGuardService
             } elseif ($uaHash !== '') {
                 self::rememberUa($uaHash, $ua, $now);
             }
+            $geo = $ip === '' ? [] : ($request->attributes->get('subscription_geoip') ?? GeoIpService::lookup($ip));
             DB::table('v2_insider_guard_activity')->upsert([[
                 'user_id' => $userId,
                 'event_type' => $type,
                 'hour_start' => $hourStart,
                 'ip_address' => $ip,
+                'ip_location' => GeoIpService::location($geo) ?? SubscribeIngressService::ipLocation($request, $ip),
+                'ip_isp' => mb_substr($geo['isp'] ?? '', 0, 120) ?: null,
+                'ip_usage' => substr($geo['usage_type'] ?? '', 0, 16) ?: null,
                 'ua_hash' => $uaHash,
                 'times' => 1,
                 'node_count' => $nodeCount,
@@ -239,6 +168,9 @@ class InsiderGuardService
                 'last_at' => $now,
             ]], ['user_id', 'event_type', 'hour_start', 'ip_address', 'ua_hash'], [
                 'times' => DB::raw('times + 1'),
+                'ip_location',
+                'ip_isp',
+                'ip_usage',
                 'last_at',
                 'node_count',
             ]);
@@ -479,6 +411,7 @@ class InsiderGuardService
         $cutoff = time() - $days * 86400;
         $targets = [
             'v2_insider_guard_activity' => ['last_at', $cutoff, 'id'],
+            'v2_insider_guard_subscription_block' => ['last_at', $cutoff, 'id'],
             'v2_insider_guard_node_user' => ['last_at', $cutoff, 'id'],
             'v2_insider_guard_health' => ['created_at', $cutoff, 'id'],
             // UA 的 last_seen 最多比引用它的活动晚一天更新，多留一天，避免还在保留期内的活动查不到 UA

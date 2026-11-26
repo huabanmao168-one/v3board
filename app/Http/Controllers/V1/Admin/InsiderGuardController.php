@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\GeoIpService;
 use App\Services\InsiderGuardService;
 use App\Services\ServerService;
 use Illuminate\Http\Request;
@@ -19,7 +20,7 @@ class InsiderGuardController extends Controller
 {
     const HOURS = [1, 8, 24, 72, 168];
     /** 活动记录对外的字段（联表取 UA 文本） */
-    const ACTIVITY_COLUMNS = ['a.id', 'a.user_id', 'a.event_type', 'a.ip_address', 'a.ua_hash', 'a.node_count', 'a.times', 'a.first_at', 'a.last_at', 'ua.ua'];
+    const ACTIVITY_COLUMNS = ['a.id', 'a.user_id', 'a.event_type', 'a.ip_address', 'a.ip_location', 'a.ip_isp', 'a.ip_usage', 'a.ua_hash', 'a.node_count', 'a.times', 'a.first_at', 'a.last_at', 'ua.ua'];
     const REVIEW_ACTIONS = ['watch', 'clear', 'restrict_recommended'];
     const NODE_TYPES = ['shadowsocks', 'vmess', 'vless', 'trojan', 'tuic', 'hysteria', 'anytls', 'v2node'];
     // 概览「近 24 小时」；节点异常的候选账号 / 时间线窗口：异常前 24 小时、后 6 小时
@@ -42,6 +43,40 @@ class InsiderGuardController extends Controller
     // int(11) 列能存的最大 ID
     const MAX_ID = 2147483647;
 
+    public function subscriptionBlocks(Request $request)
+    {
+        $rows = DB::table('v2_insider_guard_subscription_block');
+        if ($request->filled('ip')) {
+            $ip = $request->input('ip');
+            if (!is_string($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
+                abort(422, '请输入有效的 IPv4 或 IPv6 地址');
+            }
+            $rows->where('ip_address', inet_ntop(inet_pton($ip)));
+        }
+        $pageSize = max(10, min(100, (int) $request->input('pageSize', 20)));
+        $current = max(1, min(100000, (int) $request->input('current', 1)));
+        return response([
+            'total' => (clone $rows)->count(),
+            'data' => $rows->orderByDesc('last_at')->orderByDesc('id')->forPage($current, $pageSize)->get(),
+        ]);
+    }
+
+    public function geoIp(Request $request)
+    {
+        $ip = $request->input('ip');
+        if ($ip === null) {
+            return response(['data' => GeoIpService::status()]);
+        }
+        if (!is_string($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
+            abort(422, '请输入有效的 IPv4 或 IPv6 地址');
+        }
+        $result = GeoIpService::lookup($ip);
+        return response(['data' => [
+            'result' => $result ?: null,
+            'status' => $result ? 'ready' : GeoIpService::databaseStatus(strpos($ip, ':') === false ? 4 : 6),
+        ]]);
+    }
+
     public function overview(Request $request)
     {
         $incidents = $this->withNodeNames(
@@ -52,9 +87,17 @@ class InsiderGuardController extends Controller
             return (int)DB::table('v2_insider_guard_activity')
                 ->where('last_at', '>=', time() - self::OVERVIEW_WINDOW_SECONDS)->sum('times');
         });
+        $top = Cache::remember('insider_guard_top_subscribe_ips', self::OVERVIEW_CACHE_SECONDS, function () {
+            return DB::table('v2_insider_guard_activity')
+                ->where('last_at', '>=', time() - self::OVERVIEW_WINDOW_SECONDS)
+                ->where('event_type', 'subscription')->where('ip_address', '<>', '')
+                ->selectRaw('ip_address, SUM(times) AS requests, MAX(ip_location) AS ip_location, MAX(ip_isp) AS ip_isp')
+                ->groupBy('ip_address')->orderByDesc('requests')->orderBy('ip_address')->limit(10)->get();
+        });
         return response([
             'data' => [
                 'recent_events' => (int)$recent,
+                'top_ips' => $top,
                 'reviews' => DB::table('v2_insider_guard_review')->count(),
                 'restricted' => DB::table('v2_insider_guard_restrict')->count(),
                 'incidents' => $incidents,
@@ -209,7 +252,7 @@ class InsiderGuardController extends Controller
         ]);
     }
 
-    /** 限制账号：不封号，之后拉订阅时节点入口换成假地址；需显式确认与原因，并留下审核记录 */
+    /** 限制账号：订阅与客户端配置仅下发提示节点；需显式确认与原因，并留下审核记录 */
     public function restrict(Request $request)
     {
         $id = $this->userId($request);
@@ -413,12 +456,10 @@ class InsiderGuardController extends Controller
             ->where('last_at', '>=', $from - InsiderGuardService::DELIVERY_DEDUP_SECONDS);
     }
 
-    /** 当前的限制记录（含该用户拿到的假入口地址），未限制为 null */
+    /** 当前的限制记录，未限制为 null */
     private function restriction(int $userId)
     {
-        $row = DB::table('v2_insider_guard_restrict')->where('user_id', $userId)->first(['admin_id', 'reason', 'created_at']);
-        if ($row) $row->decoy_host = InsiderGuardService::decoyHost($userId);
-        return $row;
+        return DB::table('v2_insider_guard_restrict')->where('user_id', $userId)->first(['admin_id', 'reason', 'created_at']);
     }
 
     /** 活动记录联 UA 字典，最近活动在前 */

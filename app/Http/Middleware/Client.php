@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use App\Models\User;
+use App\Services\SubscribeIngressService;
 use App\Utils\Helper;
 use Illuminate\Support\Facades\Cache;
 
@@ -18,6 +19,10 @@ class Client
      */
     public function handle($request, Closure $next)
     {
+        if ($request->route()->getActionMethod() === 'subscribe') {
+            SubscribeIngressService::enforce($request);
+        }
+
         $token = $request->input('token');
         if (empty($token)) {
             abort(403, 'token is null');

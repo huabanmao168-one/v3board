@@ -179,6 +179,8 @@ class AdminRoute
             $router->post('/theme/getThemeConfig', 'V1\\Admin\\ThemeController@getThemeConfig');
             // InsiderGuard（风控中心）
             $router->get ('/insiderGuard/overview', 'V1\\Admin\\InsiderGuardController@overview');
+            $router->get ('/insiderGuard/geoIp', 'V1\\Admin\\InsiderGuardController@geoIp');
+            $router->get ('/insiderGuard/subscriptionBlocks', 'V1\\Admin\\InsiderGuardController@subscriptionBlocks');
             $router->get ('/insiderGuard/users', 'V1\\Admin\\InsiderGuardController@users');
             $router->get ('/insiderGuard/events', 'V1\\Admin\\InsiderGuardController@events');
             $router->get ('/insiderGuard/userDetail', 'V1\\Admin\\InsiderGuardController@userDetail');

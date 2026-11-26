@@ -5,7 +5,7 @@ namespace App\Http\Controllers\V1\Client;
 use App\Http\Controllers\Controller;
 use App\Services\InsiderGuardService;
 use App\Services\ServerService;
-use App\Services\UserService;
+use App\Services\SubscriptionNotice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Yaml\Yaml;
@@ -14,17 +14,20 @@ class AppController extends Controller
 {
     public function getConfig(Request $request)
     {
-        $servers = [];
-        $decoy = false;
         $user = $request->user;
-        $userService = new UserService();
-        $available = $userService->isAvailable($user);
-        if ($available) {
-            $serverService = new ServerService();
-            $servers = $serverService->getAvailableServers($user);
-            // 风控中心限制的用户：与订阅接口一样，节点入口换成假地址
-            $decoy = InsiderGuardService::isRestricted((int)$user['id']);
-            if ($decoy) InsiderGuardService::applyDecoy($servers, (int)$user['id']);
+        if ($user->banned) {
+            abort(403, '账号已被封禁');
+        }
+        $notice = SubscriptionNotice::forUser($user);
+        if ($notice !== null && !config('v2board.subscribe_notice_enable', 1)) {
+            return response('', 403);
+        }
+        if ($notice === null) {
+            $servers = (new ServerService())->getAvailableServers($user);
+        } else {
+            $user = clone $user;
+            $user->uuid = SubscriptionNotice::PASSWORD;
+            $servers = [SubscriptionNotice::node($notice)];
         }
         $defaultConfig = base_path() . '/resources/rules/app.clash.yaml';
         $customConfig = base_path() . '/resources/rules/custom.app.clash.yaml';
@@ -63,8 +66,8 @@ class AppController extends Controller
         }
 
         // 风控中心：与订阅接口一样，可用用户每次拉取记一次活动；下发记录只算实际输出的节点
-        if ($available) {
-            InsiderGuardService::recordSubscribe($user, $request, $delivered, $decoy);
+        if ($notice === null) {
+            InsiderGuardService::recordSubscribe($user, $request, $delivered);
         }
         $config['proxies'] = array_merge($config['proxies'] ? $config['proxies'] : [], $proxy);
         foreach ($config['proxy-groups'] as $k => $v) {

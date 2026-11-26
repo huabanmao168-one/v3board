@@ -615,6 +615,9 @@ CREATE TABLE IF NOT EXISTS `v2_insider_guard_activity` (
   `event_type` varchar(20) CHARACTER SET ascii NOT NULL COMMENT 'login / subscription',
   `hour_start` int(11) NOT NULL COMMENT '所在小时的起点',
   `ip_address` varchar(45) CHARACTER SET ascii NOT NULL DEFAULT '',
+  `ip_location` varchar(160) DEFAULT NULL,
+  `ip_isp` varchar(120) DEFAULT NULL,
+  `ip_usage` varchar(16) DEFAULT NULL,
   `ua_hash` char(32) CHARACTER SET ascii NOT NULL DEFAULT '' COMMENT 'UA 的 md5，见 v2_insider_guard_ua',
   `times` int(11) NOT NULL DEFAULT 1 COMMENT '该小时内的次数',
   `node_count` int(11) DEFAULT NULL COMMENT '订阅：最近一次下发的节点数',
@@ -696,3 +699,18 @@ CREATE TABLE IF NOT EXISTS `v2_insider_guard_review` (
 
 
 -- 2025-09-12 10:05:00
+
+CREATE TABLE IF NOT EXISTS `v2_insider_guard_subscription_block` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `hour_start` int NOT NULL,
+  `ip_address` varchar(45) CHARACTER SET ascii NOT NULL,
+  `ip_location` varchar(160) DEFAULT NULL,
+  `ua` varchar(512) NOT NULL,
+  `reason` varchar(64) CHARACTER SET ascii NOT NULL,
+  `status` smallint unsigned NOT NULL,
+  `times` bigint unsigned NOT NULL DEFAULT 1,
+  `last_at` int NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `bucket` (`ip_address`,`hour_start`,`reason`),
+  KEY `last_at` (`last_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

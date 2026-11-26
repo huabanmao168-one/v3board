@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Services\GeoIpService;
+use App\Services\SubscribeIngressService;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ConfigSave extends FormRequest
@@ -55,11 +57,16 @@ class ConfigSave extends FormRequest
         'show_info_to_server_enable' => 'in:0,1',
         'show_subscribe_method' => 'in:0,1,2',
         'show_subscribe_expire' => 'nullable|integer',
-        'subscribe_encrypt_enable' => 'in:0,1',
-        'subscribe_encrypt_key' => 'nullable|string',
-        'subscribe_encrypt_iv' => 'nullable|string',
-        'subscribe_encrypt_ua' => 'nullable|string',
-        'subscribe_encrypt_plan_ids' => 'nullable|string',
+        'subscribe_ingress_proxies' => 'nullable|string|max:4096',
+        'subscribe_ingress_allow_ips' => 'nullable|string|max:16384',
+        'subscribe_ingress_cloud_providers' => 'array',
+        'subscribe_ingress_block_ua' => 'nullable|string|max:4096',
+        'subscribe_ingress_block_oversea' => 'in:0,1',
+        'subscribe_ingress_allow_hk_mo_tw' => 'in:0,1',
+        'subscribe_ingress_block_browser' => 'in:0,1',
+        'subscribe_display_rules' => 'nullable|string|max:65535|json',
+        'subscribe_notice_enable' => 'in:0,1',
+        'subscribe_lumi_enable' => 'in:0,1',
         // server
         'server_api_url' => 'nullable|string',
         'server_token' => 'nullable|min:16',
@@ -83,6 +90,8 @@ class ConfigSave extends FormRequest
         'email_password' => '',
         'email_encryption' => '',
         'email_from_address' => '',
+        'sub_panel_report_url' => ['nullable', 'string', 'max:2048', 'url', 'regex:~^https?://[^/?#@]+/r/[A-Za-z0-9_-]+$~i'],
+        'sub_panel_report_key' => 'nullable|string|max:255|regex:/^[!-~]+$/',
         'remind_expire_days' => 'integer|min:1|max:365',
         'remind_expire_times' => 'integer|min:1|max:24',
         'remind_traffic_percent' => 'integer|min:1|max:100',
@@ -123,7 +132,6 @@ class ConfigSave extends FormRequest
         'insider_guard_health_enable' => 'in:0,1',
         'insider_guard_health_timeout' => 'integer|min:1|max:5',
         'insider_guard_alert_cooldown_minutes' => 'integer|min:10|max:525600',
-        'insider_guard_decoy_host' => ['nullable', 'string', 'max:253', 'regex:/^(\[[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*\]|[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*|\d{1,3}(?:\.\d{1,3}){3}|[A-Za-z0-9](?:[A-Za-z0-9\-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9\-]*[A-Za-z0-9])?)*)$/'],
     ];
     /**
      * Get the validation rules that apply to the request.
@@ -133,16 +141,9 @@ class ConfigSave extends FormRequest
     public function rules()
     {
         $rules = self::RULES;
+        $rules['subscribe_ingress_cloud_providers.*'] = 'required|string|distinct|in:'
+            . implode(',', GeoIpService::cloudProviders());
 
-        // 假入口地址形似 IP（含冒号或四段数字）时必须是合法的 IPv4 / IPv6，域名只做形式检查
-        $rules['insider_guard_decoy_host'][] = function ($attribute, $value, $fail) {
-            if ($value === null || $value === '') return;
-            $host = trim((string)$value, '[]');
-            if ((strpos($host, ':') !== false || preg_match('/^\d{1,3}(\.\d{1,3}){3}$/', $host))
-                && !filter_var($host, FILTER_VALIDATE_IP)) {
-                $fail('假入口地址不是有效的 IP');
-            }
-        };
 
         $rules['deposit_bounus'][] = function ($attribute, $value, $fail) {
             foreach ($value as $tier) {
@@ -154,6 +155,44 @@ class ConfigSave extends FormRequest
                 }
             }
         };
+        foreach (['subscribe_ingress_proxies', 'subscribe_ingress_allow_ips'] as $field) {
+            $rules[$field] = array_merge(explode('|', $rules[$field]), [function ($attribute, $value, $fail) {
+                if (!is_string($value)) {
+                    return;
+                }
+                foreach (SubscribeIngressService::entries($value) as $entry) {
+                    $parts = explode('/', $entry, 2);
+                    $address = filter_var($parts[0], FILTER_VALIDATE_IP);
+                    $max = strpos($parts[0], ':') === false ? 32 : 128;
+                    if (!$address || (isset($parts[1]) && (!ctype_digit($parts[1]) || (int) $parts[1] > $max))) {
+                        $fail('请输入有效的 IPv4、IPv6 或 CIDR 地址');
+                        return;
+                    }
+                }
+            }]);
+        }
+        $rules['subscribe_display_rules'] = array_merge(explode('|', $rules['subscribe_display_rules']), [function ($attribute, $value, $fail) {
+            $rules = is_string($value) ? json_decode($value) : null;
+            if (!is_array($rules)) {
+                $fail('展示规则必须是 JSON 数组');
+                return;
+            }
+            foreach ($rules as $rule) {
+                if (!is_object($rule) || !in_array($rule->match ?? null, ['all', 'email_exact', 'email_suffix', 'email_keyword', 'ua_contains', 'ua_not_contains'], true)
+                    || ($rule->match !== 'all' && (!is_string($rule->value ?? null) || trim($rule->value) === ''))
+                    || (isset($rule->title) && !is_string($rule->title))
+                    || (isset($rule->replacements) && !is_object($rule->replacements))) {
+                    $fail('展示规则的匹配方式、匹配值、标题或替换项无效');
+                    return;
+                }
+                foreach ($rule->replacements ?? [] as $from => $to) {
+                    if ($from === '' || !is_string($to)) {
+                        $fail('展示规则的替换项必须由非空文本和替换文本组成');
+                        return;
+                    }
+                }
+            }
+        }]);
         return $rules;
     }
 
@@ -161,6 +200,7 @@ class ConfigSave extends FormRequest
     {
         // illiteracy prompt
         return [
+            'sub_panel_report_url.regex' => '请输入 Sub-Panel 提供的完整上报 URL',
             'app_url.url' => '站点URL格式不正确，必须携带http(s)://',
             'subscribe_url.url' => '订阅URL格式不正确，必须携带http(s)://',
             'subscribe_path.regex' => '订阅路径必须以/开头',

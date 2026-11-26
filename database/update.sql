@@ -973,3 +973,22 @@ CREATE TABLE IF NOT EXISTS `v2_insider_guard_review` (
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='风控中心：人工审核记录';
+
+ALTER TABLE `v2_insider_guard_activity` ADD COLUMN `ip_location` varchar(160) DEFAULT NULL;
+ALTER TABLE `v2_insider_guard_activity` ADD COLUMN `ip_isp` varchar(120) DEFAULT NULL;
+ALTER TABLE `v2_insider_guard_activity` ADD COLUMN `ip_usage` varchar(16) DEFAULT NULL;
+
+CREATE TABLE IF NOT EXISTS `v2_insider_guard_subscription_block` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `hour_start` int NOT NULL,
+  `ip_address` varchar(45) CHARACTER SET ascii NOT NULL,
+  `ip_location` varchar(160) DEFAULT NULL,
+  `ua` varchar(512) NOT NULL,
+  `reason` varchar(64) CHARACTER SET ascii NOT NULL,
+  `status` smallint unsigned NOT NULL,
+  `times` bigint unsigned NOT NULL DEFAULT 1,
+  `last_at` int NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `bucket` (`ip_address`,`hour_start`,`reason`),
+  KEY `last_at` (`last_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

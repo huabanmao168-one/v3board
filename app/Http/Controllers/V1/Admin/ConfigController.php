@@ -5,6 +5,8 @@ namespace App\Http\Controllers\V1\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ConfigSave;
 use App\Jobs\SendEmailJob;
+use App\Services\GeoIpService;
+use App\Services\SubscribeIngressService;
 use App\Services\TelegramService;
 use App\Utils\Dict;
 use Illuminate\Http\Request;
@@ -118,11 +120,9 @@ class ConfigController extends Controller
                 'show_info_to_server_enable' => (int) config('v2board.show_info_to_server_enable', 0),
                 'show_subscribe_method' => (int) config('v2board.show_subscribe_method', 0),
                 'show_subscribe_expire' => (int) config('v2board.show_subscribe_expire', 5),
-                'subscribe_encrypt_enable' => (int) config('v2board.subscribe_encrypt_enable', 0),
-                'subscribe_encrypt_key' => config('v2board.subscribe_encrypt_key'),
-                'subscribe_encrypt_iv' => config('v2board.subscribe_encrypt_iv'),
-                'subscribe_encrypt_ua' => config('v2board.subscribe_encrypt_ua'),
-                'subscribe_encrypt_plan_ids' => config('v2board.subscribe_encrypt_plan_ids'),
+                'subscribe_display_rules' => config('v2board.subscribe_display_rules'),
+                'subscribe_notice_enable' => (int) config('v2board.subscribe_notice_enable', 1),
+                'subscribe_lumi_enable' => (int) config('v2board.subscribe_lumi_enable', 0),
             ],
             'frontend' => [
                 'frontend_theme' => config('v2board.frontend_theme', 'v2board'),
@@ -148,7 +148,9 @@ class ConfigController extends Controller
                 'email_username' => config('v2board.email_username'),
                 'email_password' => config('v2board.email_password'),
                 'email_encryption' => config('v2board.email_encryption'),
-                'email_from_address' => config('v2board.email_from_address')
+                'email_from_address' => config('v2board.email_from_address'),
+                'sub_panel_report_url' => config('v2board.sub_panel_report_url'),
+                'sub_panel_report_key' => config('v2board.sub_panel_report_key'),
             ],
             'email_remind' => [
                 'remind_expire_days' => (int) config('v2board.remind_expire_days', 1),
@@ -188,12 +190,21 @@ class ConfigController extends Controller
                 'password_limit_expire' => config('v2board.password_limit_expire', 60)
             ],
             'insider_guard' => [
+                'subscribe_ingress_proxies' => config('v2board.subscribe_ingress_proxies'),
+                'subscribe_ingress_allow_ips' => config('v2board.subscribe_ingress_allow_ips'),
+                'subscribe_ingress_block_ua' => config('v2board.subscribe_ingress_block_ua'),
+                'subscribe_ingress_cloud_providers' => GeoIpService::blockedCloudProviders(),
+                'cloud_provider_options' => GeoIpService::cloudProviders(),
+                'cloud_legacy_cidrs_active' => config('v2board.subscribe_ingress_cloud_providers') === null
+                    && (bool) SubscribeIngressService::entries(config('v2board.subscribe_ingress_cloud_ips')),
+                'subscribe_ingress_block_oversea' => config('v2board.subscribe_ingress_block_oversea'),
+                'subscribe_ingress_allow_hk_mo_tw' => config('v2board.subscribe_ingress_allow_hk_mo_tw'),
+                'subscribe_ingress_block_browser' => config('v2board.subscribe_ingress_block_browser'),
                 'insider_guard_risk_threshold' => (int) config('v2board.insider_guard_risk_threshold', 50),
                 'insider_guard_retention_days' => (int) config('v2board.insider_guard_retention_days', 3),
                 'insider_guard_health_enable' => (int) config('v2board.insider_guard_health_enable', 0),
                 'insider_guard_health_timeout' => (int) config('v2board.insider_guard_health_timeout', 2),
                 'insider_guard_alert_cooldown_minutes' => (int) config('v2board.insider_guard_alert_cooldown_minutes', 120),
-                'insider_guard_decoy_host' => (string) config('v2board.insider_guard_decoy_host', ''),
             ]
         ];
         if ($key && isset($data[$key])) {
@@ -326,6 +337,12 @@ class ConfigController extends Controller
     public function save(ConfigSave $request)
     {
         $data = $request->validated();
+        $ingress = array_replace(config('v2board', []), $data);
+        if (!empty($ingress['subscribe_ingress_block_oversea'])
+            && !SubscribeIngressService::entries($ingress['subscribe_ingress_proxies'] ?? null)) {
+            abort(422, '开启海外订阅限制前，请先填写订阅入口可信代理');
+        }
+
         // 签到联动：关闭普通签到时自动关闭运气签到
         if (isset($data['checkin_enable']) && !$data['checkin_enable']) {
             $data['lucky_checkin_enable'] = 0;

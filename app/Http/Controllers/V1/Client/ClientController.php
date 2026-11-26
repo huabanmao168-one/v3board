@@ -8,32 +8,71 @@ use App\Protocols\ClashMeta;
 use App\Protocols\ClashNyanpasu;
 use App\Protocols\ClashVerge;
 use App\Protocols\General;
-use App\Protocols\NextinEncrypted;
 use App\Protocols\Singbox\Singbox;
 use App\Protocols\Singbox\SingboxOld;
 use App\Services\InsiderGuardService;
+use App\Services\LumiSubscribeService;
 use App\Services\ServerService;
-use App\Services\SubscribeEncryptService;
+use App\Services\SubscribeDisplayService;
+use App\Services\SubscriptionNotice;
 use App\Services\UserService;
 use App\Utils\Helper;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 
 class ClientController extends Controller
 {
-    // 标记本次响应是否已由 NextinEncrypted 通道处理，避免叠加订阅加密
-    private $nextinHandled = false;
-
     public function subscribe(Request $request)
     {
-        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        $response = $this->buildSubscribe($request, $userAgent);
-        if ($this->nextinHandled) {
-            return $response;
+        $userAgent = (string) $request->userAgent();
+        $user = $request->user;
+        if ($user->banned) {
+            abort(403, '账号已被封禁');
         }
-        return SubscribeEncryptService::encryptResponse($response, $request->user, $userAgent, (string)$request->header('X-IV', ''));
+        $notice = SubscriptionNotice::forUser($user);
+        if ($notice !== null && !config('v2board.subscribe_notice_enable', 1)) {
+            return response('', 403);
+        }
+        $display = $notice === null ? SubscribeDisplayService::matchRule($request) : [];
+        $response = $this->buildSubscribe($request, $userAgent, $display, $notice);
+        $response = SubscribeDisplayService::rewriteResponse($response, $display);
+        if (config('v2board.subscribe_lumi_enable', false) && stripos($userAgent, 'lumi') !== false) {
+            return LumiSubscribeService::encryptResponse($response, $request->input('token'));
+        }
+        return $response;
     }
 
-    private function buildSubscribe(Request $request, $userAgent)
+    private function reportToSubPanel(Request $request): void
+    {
+        $url = config('v2board.sub_panel_report_url');
+        if (!$url) {
+            return;
+        }
+
+        $user = $request->user;
+        try {
+            Http::timeout(3)
+                ->withOptions(['allow_redirects' => false])
+                ->withHeaders(['X-Report-Key' => (string) config('v2board.sub_panel_report_key')])
+                ->post($url, [
+                    'token' => $user->token,
+                    'uuid' => (string) $user->uuid,
+                    'email' => (string) $user->email,
+                    'traffic_used' => (int) $user->u + (int) $user->d,
+                    'traffic_total' => (int) $user->transfer_enable,
+                    'wallet_balance' => (int) $user->balance,
+                    'commission_balance' => (int) $user->commission_balance,
+                    'user_created_at' => (string) $user->created_at,
+                    'ip' => (string) $request->attributes->get('subscription_client_ip', $request->ip()),
+                    'user_agent' => (string) $request->userAgent(),
+                    'site_domain' => $request->getHost(),
+                ]);
+        } catch (\Exception $e) {
+            // 上报连接失败时继续下发订阅。
+        }
+    }
+
+    private function buildSubscribe(Request $request, $userAgent, array $display, ?string $notice)
     {
         $explicitFlag = $request->input('flag');
         $flag = strtolower($explicitFlag ?? $userAgent);
@@ -42,75 +81,65 @@ class ClientController extends Controller
             ? strpos($flag, 'sing') !== false
             : preg_match('/sing[-_ ]?box/', $flag) === 1;
         $user = $request->user;
-        // account not expired and is not banned.
-        $userService = new UserService();
-        if ($userService->isAvailable($user)) {
-            $serverService = new ServerService();
-            $servers = $serverService->getAvailableServers($user);
-            // 被 Nextin 规则拦截的 UA 什么都拿不到，不算一次下发，提前返回
-            if ($flag && NextinEncrypted::shouldBlockSubscriptionForUserAgent($userAgent)) {
-                return response('', 403);
-            }
-            // 风控中心限制的用户：节点照常下发，入口地址换成假的；放在域名重写之前，重写规则不会再把真实地址带回来
-            $decoy = InsiderGuardService::isRestricted((int)$user->id);
-            if ($decoy) InsiderGuardService::applyDecoy($servers, (int)$user->id);
+        if ($notice === null) {
+            $servers = (new ServerService())->getAvailableServers($user);
             $this->applyDomainRewriteRules($servers, $flag);
             $this->applyNodeWhitelistRules($servers, $flag);
-            InsiderGuardService::recordSubscribe($user, $request, $servers, $decoy);
-            $protocol = null;
-            $version = null;
-            if ($flag) {
-                $shouldReturnEncryptedClashMeta =
-                    NextinEncrypted::shouldEncryptForUserAgent($userAgent)
-                    || strpos($flag, get_class_vars(NextinEncrypted::class)['flag']) !== false;
+            InsiderGuardService::recordSubscribe($user, $request, $servers);
+            $this->reportToSubPanel($request);
+        } else {
+            $user = clone $user;
+            $user->uuid = SubscriptionNotice::PASSWORD;
+            $servers = [SubscriptionNotice::node($notice)];
+        }
 
-                if ($shouldReturnEncryptedClashMeta || !$isSingBox) {
+        $protocol = null;
+        $version = null;
+        if ($flag) {
+            if (!$isSingBox) {
+                if ($notice === null) {
                     $this->setSubscribeInfoToServers($servers, $user);
                 }
-
-                if ($shouldReturnEncryptedClashMeta) {
-                    $this->nextinHandled = true;
-                    $protocol = NextinEncrypted::class;
-                } elseif (!$isSingBox) {
-                    foreach (array_reverse(glob(app_path('Protocols') . '/*.php')) as $file) {
-                        $file = 'App\\Protocols\\' . basename($file, '.php');
-                        if (strpos($flag, get_class_vars($file)['flag']) !== false) {
-                            $protocol = $file;
-                            break;
-                        }
-                    }
-                } else {
-                    // 保留预发布后缀（1.13.0-beta.2），后续按版本下发新字段时才不会把预发布版当成正式版
-                    if (preg_match('/sing-box\s+([0-9]+(?:\.[0-9]+)*(?:-[0-9A-Za-z.]+)?)/i', $flag, $matches)) {
-                        $version = $matches[1];
-                    }
-                    if (!is_null($version) && $version >= '1.12.0') {
-                        $protocol = Singbox::class;
-                    } else {
-                        $protocol = SingboxOld::class;
+                foreach (array_reverse(glob(app_path('Protocols') . '/*.php')) as $file) {
+                    $file = 'App\\Protocols\\' . basename($file, '.php');
+                    if (strpos($flag, get_class_vars($file)['flag']) !== false) {
+                        $protocol = $file;
+                        break;
                     }
                 }
+            } else {
+                // 保留预发布后缀（1.13.0-beta.2），后续按版本下发新字段时才不会把预发布版当成正式版
+                if (preg_match('/sing-box\s+([0-9]+(?:\.[0-9]+)*(?:-[0-9A-Za-z.]+)?)/i', $flag, $matches)) {
+                    $version = $matches[1];
+                }
+                if (!is_null($version) && $version >= '1.12.0') {
+                    $protocol = Singbox::class;
+                } else {
+                    $protocol = SingboxOld::class;
+                }
             }
-
-            $this->applySelfSignedFallback($servers, $protocol, $version);
-
-            if ($protocol === Singbox::class) {
-                return (new Singbox($user, $servers, ['version' => $version]))->handle();
-            }
-            $protocol = $protocol ?? General::class;
-            return (new $protocol($user, $servers))->handle();
         }
+
+        $this->applySelfSignedFallback($servers, $protocol, $version);
+        if (!empty($display['replacements'])) {
+            SubscribeDisplayService::renameNodes($servers, $display);
+        }
+
+        if ($protocol === Singbox::class) {
+            return (new Singbox($user, $servers, ['version' => $version]))->handle();
+        }
+        $protocol = $protocol ?? General::class;
+        return (new $protocol($user, $servers))->handle();
     }
 
     /**
      * 上游做法：Clash 系、sing-box 订阅里「自签名（面板下发）」证书的 v2node 节点改成允许不安全，否则连不上。
      * 本仓库能给客户端下发证书固定的（mihomo 的 fingerprint、sing-box 1.13+ 的公钥固定）保持原样，pin 照常校验；
-     * NextinEncrypted 的客户端不读 fingerprint，按上游做法处理
      */
     private function applySelfSignedFallback(array &$servers, ?string $protocol, ?string $version)
     {
         if (!in_array($protocol, [
-            Clash::class, ClashMeta::class, ClashNyanpasu::class, ClashVerge::class, NextinEncrypted::class,
+            Clash::class, ClashMeta::class, ClashNyanpasu::class, ClashVerge::class,
             Singbox::class, SingboxOld::class,
         ], true)) {
             return;

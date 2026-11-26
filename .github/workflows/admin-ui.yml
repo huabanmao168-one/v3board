@@ -1,0 +1,26 @@
+name: Build Admin UI
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: admin/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: admin/pnpm-lock.yaml
+      - run: ./build-admin.sh admin
+      - run: pnpm --dir admin typecheck
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3board-admin-ui
+          path: public/assets/admin
+          if-no-files-found: error

@@ -1,15 +1,14 @@
 #!/bin/bash
 # 构建后台前端并放进 public/assets/admin。
-# 后台前端源码在 https://github.com/codeman857/v2board-admin（React），本仓库只保存构建产物，
+# 内置 React 源码在 admin/，构建产物随 V3Board 分发，
 # 用户 update.sh 拉取后直接可用，服务器上不需要 Node。
 #
-# 用法：./build-admin.sh [v2board-admin 源码目录]   默认 ../v2board-admin
-# 需要：Node >= 22.22、pnpm 11（npm i -g pnpm@11）
-# 流程：先在 v2board-admin 提交并推送，再跑本脚本，然后把 public/assets/admin 的变化和后端改动一起提交。
+# 用法：./build-admin.sh [后台前端源码目录]，默认 admin
+# 需要：Node >= 22.22、pnpm 11
 set -euo pipefail
 cd "$(dirname "$0")"
 
-SRC="${1:-../v2board-admin}"
+SRC="${1:-admin}"
 DEST="public/assets/admin"
 
 if [ ! -f "$SRC/package.json" ]; then
@@ -22,7 +21,7 @@ if ! git -C "$SRC" rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 # 产物必须来自已提交的源码，否则 SOURCE 里记录的 commit 在仓库里找不到；本地联调可用 ALLOW_DIRTY=1 跳过
-DIRTY=$(git -C "$SRC" status --porcelain)
+DIRTY=$(git -C "$SRC" status --porcelain -- .)
 if [ -n "$DIRTY" ] && [ "${ALLOW_DIRTY:-0}" != "1" ]; then
   echo "v2board-admin 有未提交的改动，请先提交（本地联调可加 ALLOW_DIRTY=1）" >&2
   exit 1
@@ -47,7 +46,11 @@ cp "$SRC/dist/favicon.png" "$DEST/favicon.png"
 COMMIT=$(git -C "$SRC" rev-parse HEAD)
 [ -n "$DIRTY" ] && COMMIT="$COMMIT-dirty"
 {
-  echo "source: $(git -C "$SRC" remote get-url origin 2>/dev/null || echo unknown)"
+  if [ "$(git -C "$SRC" rev-parse --show-toplevel)" = "$(git rev-parse --show-toplevel)" ]; then
+    echo "source: $(git -C "$SRC" rev-parse --show-prefix)"
+  else
+    echo "source: $(git -C "$SRC" remote get-url origin 2>/dev/null || echo unknown)"
+  fi
   echo "commit: $COMMIT"
   echo "built:  $(date '+%Y-%m-%d %H:%M:%S %z')"
 } > "$DEST/SOURCE"
