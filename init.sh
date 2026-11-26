@@ -18,6 +18,11 @@ fi
 
 php artisan v2board:install
 
+# Apply PHP 8.6 compatibility patches to vendor dependencies
+if [ -f "fix-vendor-php86.sh" ]; then
+    bash fix-vendor-php86.sh
+fi
+
 if [ -f "/etc/init.d/bt" ]; then
   chown -R www $(pwd);
 fi

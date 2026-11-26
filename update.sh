@@ -59,6 +59,11 @@ fi
 php artisan v2board:update
 php artisan view:clear
 
+# Apply PHP 8.6 compatibility patches to vendor dependencies
+if [ -f "fix-vendor-php86.sh" ]; then
+    bash fix-vendor-php86.sh
+fi
+
 if [ "$php_main_version" -ge 8 ]; then
     echo "If you use Webman, restart it after the update."
 fi
