@@ -56,7 +56,10 @@ class SubscribeDisplayService
         $response->headers->remove('Content-Length');
         if (!empty($rule['title'])) {
             if (!headers_sent()) {
+                // Clash-family protocols emit this with raw header() in lowercase. Runtimes that
+                // replace header() (webman/adapterman) key headers case-sensitively, so drop both.
                 header_remove('Content-Disposition');
+                header_remove('content-disposition');
             }
             $response->headers->set('Content-Disposition', "attachment; filename*=UTF-8''" . rawurlencode($rule['title']));
             $response->headers->set('profile-title', 'base64:' . base64_encode($rule['title']));

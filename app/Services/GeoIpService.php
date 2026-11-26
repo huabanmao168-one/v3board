@@ -127,13 +127,29 @@ class GeoIpService
         if ($iso !== '' && $iso !== 'CN' && $iso !== 'XX') {
             return $iso;
         }
-        $region = implode(' ', [$info['country'] ?? '', $info['region'] ?? '', $info['province'] ?? '', $info['city'] ?? '']);
-        foreach (['HK' => '/香港|Hong\s*Kong/iu', 'MO' => '/澳门|澳門|Maca[ou]/iu', 'TW' => '/台湾|臺灣|台灣|Taiwan/iu'] as $code => $pattern) {
-            if (preg_match($pattern, $region)) {
-                return $code;
+        // Legacy databases label HK/MO/TW as China (or by their own name) without an ISO code.
+        // Only the country field, or the province-level fields of a Chinese record, may decide
+        // this: a city elsewhere that happens to be called Macau must not be classified as MO.
+        $country = trim($info['country'] ?? '');
+        $china = $iso === 'CN' || in_array($country, ['中国', '中國', 'China'], true);
+        $fields = [$country];
+        if ($china) {
+            $fields[] = trim($info['province'] ?? '');
+            $fields[] = trim($info['region'] ?? '');
+        }
+        $patterns = [
+            'HK' => '/^(中[国國])?香港|^Hong\s*Kong/iu',
+            'MO' => '/^(中[国國])?(澳门|澳門)|^Maca[ou]/iu',
+            'TW' => '/^(中[国國])?(台湾|臺灣|台灣)|^Taiwan/iu',
+        ];
+        foreach ($fields as $field) {
+            foreach ($patterns as $code => $pattern) {
+                if (preg_match($pattern, $field)) {
+                    return $code;
+                }
             }
         }
-        return $iso === 'CN' || in_array(trim($info['country'] ?? ''), ['中国', '中國', 'China'], true) ? 'CN' : '';
+        return $china ? 'CN' : '';
     }
 
     public static function location(array $info): ?string

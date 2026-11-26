@@ -13,8 +13,31 @@ if ! command -v git &> /dev/null; then
 fi
 
 repository="${V3BOARD_UPDATE_REPOSITORY:-https://github.com/huabanmao168-one/v3board.git}"
+
+# The tree is chowned to www on BT panels while this script usually runs as
+# root. safe.directory is only honoured from global/system config, not -c.
+if ! git config --global --get-all safe.directory | grep -qxF "$(pwd)"; then
+    git config --global --add safe.directory "$(pwd)"
+fi
+
 git fetch "$repository" main || exit 1
-git merge --ff-only FETCH_HEAD || exit 1
+
+# composer require and the pcntl sed below rewrite these tracked files on every
+# run; restore them so they cannot block the merge. Both are re-applied later.
+git checkout -- composer.json cli-php.ini || exit 1
+
+if ! git merge --ff-only FETCH_HEAD; then
+    if [ "$V3BOARD_UPDATE_FORCE" = "1" ]; then
+        echo "Fast-forward failed, resetting to the fetched version (V3BOARD_UPDATE_FORCE=1)."
+        git reset --hard FETCH_HEAD || exit 1
+    else
+        echo "Update aborted: this checkout cannot be fast-forwarded to $repository main."
+        echo "It has local commits, local changes to tracked files, or comes from another repository (e.g. v2board)."
+        echo "Run 'git status' to inspect. To discard local commits and tracked changes and switch to the"
+        echo "fetched version, back up first and rerun: V3BOARD_UPDATE_FORCE=1 ./update.sh"
+        exit 1
+    fi
+fi
 composer_download=$(mktemp ./composer.phar.XXXXXX)
 trap 'rm -f -- "$composer_download"' EXIT
 wget https://github.com/composer/composer/releases/latest/download/composer.phar -O "$composer_download"

@@ -130,11 +130,10 @@ cd v3board
 bash init.sh
 ```
 
-从兼容的 v2board Git 部署迁移前，先备份数据库和站点配置。更新脚本直接拉取本仓库的 main 并要求快进合并。遇到分叉时，请在备份后使用新检出的 V3Board 目录部署。
+从兼容的 v2board Git 部署迁移前，先备份数据库和站点配置。更新脚本直接拉取本仓库的 main（不看 `origin`）并要求快进合并。遇到分叉时，推荐在备份后使用新检出的 V3Board 目录部署；也可以在确认可丢弃本地提交和对已跟踪文件的修改后，用 `V3BOARD_UPDATE_FORCE=1` 让脚本强制切换到拉取的版本：
 
 ```shell
-git remote set-url origin https://github.com/huabanmao168-one/v3board.git
-./update.sh
+./update.sh || V3BOARD_UPDATE_FORCE=1 ./update.sh
 ```
 
 然后把缓存驱动改为 redis，刷新设置缓存并重启队列：
@@ -154,7 +153,7 @@ php artisan horizon:terminate
 ./update.sh
 ```
 
-`update.sh` 会拉取代码、更新依赖并执行 `database/update.sql`（新表、新字段都在里面，重复执行安全）。升级后台前端后如果站点前面有 CDN 缓存了静态文件，清一次 `/assets/admin/` 的缓存（分包文件名带哈希不会串，真正要换新的是 `assets/admin.js`、`admin.css`、`favicon.png`，CDN 忽略查询串时旧的 admin.js 会去找已删除的分包导致后台白屏）。php-fpm 开了 opcache 且不校验文件时间戳的，升级后 reload 一次 php-fpm，否则可能还在执行旧的编译视图。使用 webman 常驻模式的站点升级后需要重启 webman。
+`update.sh` 会拉取代码、更新依赖并执行 `database/update.sql`（新表、新字段都在里面，重复执行安全）。升级后台前端后如果站点前面有 CDN 缓存了静态文件，清一次 `/assets/admin/` 的缓存（分包文件名带哈希不会串，真正要换新的是 `assets/admin.js`、`admin.css`、`favicon.png`，CDN 忽略查询串时旧的 admin.js 会去找已删除的分包导致后台白屏）。php-fpm 开了 opcache 且不校验文件时间戳的，升级后 reload 一次 php-fpm，否则可能还在执行旧的编译视图。使用 webman 常驻模式的站点升级后需要重启 webman。`update.sh` 每次会还原 `composer.json` 和 `cli-php.ini` 再合并，对这两个文件的手动修改不会保留；其他已跟踪文件有本地修改或本地提交导致无法快进时脚本会中止并提示，确认可丢弃后用 `V3BOARD_UPDATE_FORCE=1 ./update.sh`。
 
 合并上游 wyx2685/v2board 有冲突时：
 

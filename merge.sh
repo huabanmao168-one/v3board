@@ -4,7 +4,7 @@ set -e
 COMMON_REMOTE=v2board
 COMMON_URL=https://github.com/wyx2685/v2board.git
 COMMON_BRANCH=master
-PRIVATE_BRANCH=main
+PRIVATE_BRANCH="${PRIVATE_BRANCH:-main}"
 
 echo "🚀 确认远端是否存在..."
 if ! git remote | grep -q "^$COMMON_REMOTE$"; then
@@ -18,7 +18,10 @@ echo "📥 拉取公共库最新代码..."
 git fetch $COMMON_REMOTE $COMMON_BRANCH
 
 echo "🔀 切换到私有分支 $PRIVATE_BRANCH"
-git checkout $PRIVATE_BRANCH
+if ! git checkout "$PRIVATE_BRANCH"; then
+  echo "❌ 找不到分支 $PRIVATE_BRANCH，可用 PRIVATE_BRANCH=<分支名> ./merge.sh 指定（例如 master）"
+  exit 1
+fi
 
 echo "🔀 尝试合并 $COMMON_REMOTE/$COMMON_BRANCH ..."
 set +e

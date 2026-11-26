@@ -17,6 +17,9 @@ class SubscribeIngressService
         $proxies = self::entries(config('v2board.subscribe_ingress_proxies'));
         $peer = (string) $request->server('REMOTE_ADDR');
         $trusted = IpUtils::checkIp($peer, $proxies);
+        // Without ingress proxies this is the TrustProxies-resolved address, the same one the
+        // activity log records. It is only as trustworthy as TrustProxies::$proxies: a wildcard
+        // there lets a direct client pick its own address via X-Forwarded-For.
         $ip = $proxies ? (string) $request->header('X-Subscription-Client-IP') : (string) $request->ip();
         if ($proxies && (!$trusted || !filter_var($ip, FILTER_VALIDATE_IP))) {
             self::deny($request, $peer, 'untrusted_ingress', 404);
