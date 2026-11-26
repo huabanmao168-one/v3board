@@ -20,7 +20,7 @@ class InsiderGuardCleanup extends Command
      *
      * @var string
      */
-    protected $description = '风控中心：按保留天数清理过期的活动、节点下发、健康探测与 UA 字典记录，以及已删除用户的限制记录';
+    protected $description = '风控中心：按保留天数清理过期的活动、节点下发与 UA 字典记录，以及已删除用户的限制记录';
 
     /**
      * Execute the console command.

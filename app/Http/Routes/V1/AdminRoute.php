@@ -191,8 +191,6 @@ class AdminRoute
             $router->post('/insiderGuard/nodeIncident', 'V1\\Admin\\InsiderGuardController@nodeIncident');
             $router->get ('/insiderGuard/candidates', 'V1\\Admin\\InsiderGuardController@candidates');
             $router->get ('/insiderGuard/timeline', 'V1\\Admin\\InsiderGuardController@timeline');
-            $router->get ('/insiderGuard/health', 'V1\\Admin\\InsiderGuardController@health');
-            $router->post('/insiderGuard/healthCheck', 'V1\\Admin\\InsiderGuardController@healthCheck')->middleware('throttle:10,1');
         });
     }
 }

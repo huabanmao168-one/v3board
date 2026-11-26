@@ -577,44 +577,13 @@ export interface GuardCandidates {
   caveat: string
 }
 
-/** 节点 TCP 健康探测记录：只在状态变化时写入，状态不变时每小时补记一次 */
-export interface GuardHealthRecord {
-  id: number
-  node_id: number
-  node_type: NodeType
-  node_name?: string | null
-  status: 'up' | 'down'
-  latency_ms: number
-  error: string | null
-  created_at: number
-}
-
 /**
- * 节点异常时间线（insiderGuard/timeline）：异常前 24 小时到后 6 小时的探测记录，以及按首次 / 最近下发时间估算
+ * 节点异常时间线（insiderGuard/timeline）：异常前 24 小时到后 6 小时按首次 / 最近下发时间估算
  * 在该时段内被下发过该节点的账号（每人一行，按最近下发时间升序，最多 500 行；deliveries_total 为时段内的账号总数）
  */
 export interface GuardTimeline {
   incident: GuardIncident
-  health: GuardHealthRecord[]
   deliveries: Array<{ user_id: number; email: string | null; times: number; first_at: number; last_at: number }>
   deliveries_total: number
   disclaimer: string
-}
-
-/** 最近的探测记录（insiderGuard/health） */
-export interface GuardHealth {
-  enabled: boolean
-  records: GuardHealthRecord[]
-  note: string
-}
-
-/** 立即探测一个节点的结果（insiderGuard/healthCheck） */
-export interface GuardHealthCheckResult {
-  node_type: NodeType
-  node_id: number
-  name?: string
-  status: 'disabled' | 'skipped' | 'up' | 'down' | 'error'
-  latency_ms?: number
-  error?: string | null
-  message?: string
 }

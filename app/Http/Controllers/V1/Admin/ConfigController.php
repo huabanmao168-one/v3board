@@ -200,9 +200,6 @@ class ConfigController extends Controller
                 'subscribe_ingress_block_browser' => config('v2board.subscribe_ingress_block_browser'),
                 'insider_guard_risk_threshold' => (int) config('v2board.insider_guard_risk_threshold', 50),
                 'insider_guard_retention_days' => (int) config('v2board.insider_guard_retention_days', 3),
-                'insider_guard_health_enable' => (int) config('v2board.insider_guard_health_enable', 0),
-                'insider_guard_health_timeout' => (int) config('v2board.insider_guard_health_timeout', 2),
-                'insider_guard_alert_cooldown_minutes' => (int) config('v2board.insider_guard_alert_cooldown_minutes', 120),
             ]
         ];
         if ($key && isset($data[$key])) {

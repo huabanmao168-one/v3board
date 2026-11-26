@@ -38,12 +38,6 @@ interface GuardConfig extends Record<IngressListKey, string>, Record<IngressSwit
   insider_guard_risk_threshold: number
   /** 审计记录保留天数 1～365 */
   insider_guard_retention_days: number
-  /** 节点 TCP 健康检查开关 0 / 1 */
-  insider_guard_health_enable: number
-  /** TCP 连接超时秒数 1～5 */
-  insider_guard_health_timeout: number
-  /** 同一告警的冷却分钟数 */
-  insider_guard_alert_cooldown_minutes: number
 }
 
 type NumberKey = Exclude<keyof GuardConfig, 'subscribe_ingress_cloud_providers' | IngressListKey>
@@ -58,9 +52,6 @@ const DEFAULTS: GuardConfig = {
   subscribe_ingress_block_browser: 0,
   insider_guard_risk_threshold: 50,
   insider_guard_retention_days: 3,
-  insider_guard_health_enable: 0,
-  insider_guard_health_timeout: 2,
-  insider_guard_alert_cooldown_minutes: 120,
 }
 
 /** 后端返回的值可能是字符串，统一转成整数；不是数字时用默认值 */
@@ -80,9 +71,6 @@ function normalize(raw: Record<string, unknown> | undefined): GuardConfig {
     subscribe_ingress_block_browser: int('subscribe_ingress_block_browser'),
     insider_guard_risk_threshold: int('insider_guard_risk_threshold'),
     insider_guard_retention_days: int('insider_guard_retention_days'),
-    insider_guard_health_enable: int('insider_guard_health_enable'),
-    insider_guard_health_timeout: int('insider_guard_health_timeout'),
-    insider_guard_alert_cooldown_minutes: int('insider_guard_alert_cooldown_minutes'),
   }
 }
 
@@ -155,19 +143,15 @@ function SettingsForm({ initial, raw }: { initial: GuardConfig; raw?: Record<str
     if (form.insider_guard_retention_days < 1 || form.insider_guard_retention_days > 365) {
       return message.error('审计保留天数需在 1～365 之间')
     }
-    if (form.insider_guard_health_timeout < 1 || form.insider_guard_health_timeout > 5) {
-      return message.error('TCP 超时需在 1～5 秒之间')
-    }
     setSaving(true)
     const res = await saveConfig(form, true)
     setSaving(false)
     if (res.code !== 200 || res.data !== true) return
     message.success('保存成功')
-    // 阈值影响风险用户的高风险判定与用户详情里的「需人工复核」，开关影响「节点健康」标签页的提示
+    // 阈值影响风险用户的高风险判定与用户详情里的「需人工复核」
     void queryClient.invalidateQueries({ queryKey: guardKeys.config })
     void queryClient.invalidateQueries({ queryKey: guardKeys.usersAll })
     void queryClient.invalidateQueries({ queryKey: guardKeys.userDetail })
-    void queryClient.invalidateQueries({ queryKey: guardKeys.health })
   }
 
   return (
@@ -215,7 +199,7 @@ function SettingsForm({ initial, raw }: { initial: GuardConfig; raw?: Record<str
       </Row>
       <Row
         title="审计保留天数"
-        description="登录 / 订阅事件、节点下发记录、健康探测记录的保留天数，1～365，默认 3；小于 2 天时节点异常的候选账号可能不全。每个活跃设备每天约 24 行、每行约 0.4 KB"
+        description="登录 / 订阅事件、节点下发记录的保留天数，1～365，默认 3；小于 2 天时节点异常的候选账号可能不全。每个活跃设备每天约 24 行、每行约 0.4 KB"
       >
         <InputNumber
           min={1}
@@ -224,33 +208,6 @@ function SettingsForm({ initial, raw }: { initial: GuardConfig; raw?: Record<str
           onChange={(v) => set('insider_guard_retention_days', v)}
         />
         <Unit>天</Unit>
-      </Row>
-      <Row
-        title="节点健康检查"
-        description="开启后由定时任务每 5 分钟对显示中的节点做一次 TCP 连通性探测，连续两次失败时告警"
-      >
-        <Switch
-          checked={form.insider_guard_health_enable === 1}
-          onChange={(checked) => set('insider_guard_health_enable', checked ? 1 : 0)}
-        />
-      </Row>
-      <Row title="TCP 超时" description="健康探测的连接超时秒数，1～5，默认 2">
-        <InputNumber
-          min={1}
-          max={5}
-          value={form.insider_guard_health_timeout}
-          onChange={(v) => set('insider_guard_health_timeout', v)}
-        />
-        <Unit>秒</Unit>
-      </Row>
-      <Row title="告警冷却" description="同一告警在冷却时间内只通过 Telegram 发送一次，最少 10 分钟，默认 120">
-        <InputNumber
-          min={10}
-          max={525600}
-          value={form.insider_guard_alert_cooldown_minutes}
-          onChange={(v) => set('insider_guard_alert_cooldown_minutes', v)}
-        />
-        <Unit>分钟</Unit>
       </Row>
       <div style={{ padding: '16px 0' }}>
         <Button type="primary" loading={saving} onClick={() => void save()}>

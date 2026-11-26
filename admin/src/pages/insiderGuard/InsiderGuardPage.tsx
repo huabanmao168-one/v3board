@@ -5,7 +5,6 @@ import { GeoIpPanel } from './GeoIpPanel'
 //   - 风险用户表的「详情」切到「用户详情」标签页并查询该用户；「审核」与用户详情里的「审核此用户」都是弹窗（ReviewModal，
 //     含限制 / 解除限制）
 //   - 登记节点异常 / 保存审核成功后刷新概览；保存审核后同时刷新风险用户表（限制标记）与「用户风险详情」（审核记录、限制状态）
-//   - 节点健康未开启时的提示可以直接跳到「风控设置」
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { useRefetch } from '@/api/queries'
@@ -15,7 +14,6 @@ import type { GuardHours } from '@/api/types'
 import { V2Tabs, type V2TabItem } from '@/components/V2Tabs'
 import { AdminLayout } from '@/layouts/AdminLayout'
 import { GuardSettings } from './GuardSettings'
-import { NodeHealth } from './NodeHealth'
 import { NodeIncidents } from './NodeIncidents'
 import { OverviewCards } from './OverviewCards'
 import { SubscriptionBlocks } from './SubscriptionBlocks'
@@ -25,7 +23,7 @@ import { RiskUsers } from './RiskUsers'
 import { guardKeys, hoursLabel, Note, useGuardUsers } from './shared'
 import { UserRiskDetail } from './UserRiskDetail'
 
-type TabKey = 'overview' | 'restricted' | 'events' | 'blocks' | 'incidents' | 'health' | 'detail' | 'geoip' | 'settings'
+type TabKey = 'overview' | 'restricted' | 'events' | 'blocks' | 'incidents' | 'detail' | 'geoip' | 'settings'
 
 /** 标签页内容区：与系统配置页一样放在 block-content 里（有内边距） */
 function Pane({ children }: { children: ReactNode }) {
@@ -107,15 +105,6 @@ export default function InsiderGuardPage() {
             failed={overview.isError}
             onChanged={() => void refetchOverview()}
           />
-        </Pane>
-      ),
-    },
-    {
-      key: 'health',
-      label: '节点健康',
-      children: (
-        <Pane>
-          <NodeHealth onOpenSettings={() => setTab('settings')} />
         </Pane>
       ),
     },

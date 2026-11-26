@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * 风控中心：风险用户、活动记录、节点异常与候选账号、节点健康、人工审核与限制。
+ * 风控中心：风险用户、活动记录、节点异常与候选账号、人工审核与限制。
  * 节点一律用 node_type + node_id 标识。活动表按小时合并（见 InsiderGuardService），时间字段为 first_at / last_at。
  */
 class InsiderGuardController extends Controller
@@ -39,7 +39,6 @@ class InsiderGuardController extends Controller
     const USER_REVIEWS_LIMIT = 30;
     const CANDIDATES_LIMIT = 100;
     const TIMELINE_LIMIT = 500;
-    const HEALTH_RECORDS_LIMIT = 150;
     // int(11) 列能存的最大 ID
     const MAX_ID = 2147483647;
 
@@ -312,11 +311,10 @@ class InsiderGuardController extends Controller
     public function nodeIncident(Request $request)
     {
         [$type, $id] = $this->node($request);
-        // 节点被封后可能已经删掉了，只要下发 / 探测记录里还有它就允许登记，否则多半是填错了
+        // 节点被封后可能已经删掉了，只要下发记录里还有它就允许登记，否则多半是填错了
         $known = (new ServerService())->getServer($id, $type)
-            || DB::table('v2_insider_guard_node_user')->where('node_type', $type)->where('node_id', $id)->exists()
-            || DB::table('v2_insider_guard_health')->where('node_type', $type)->where('node_id', $id)->exists();
-        if (!$known) abort(422, '节点不存在，也没有它的下发或探测记录');
+            || DB::table('v2_insider_guard_node_user')->where('node_type', $type)->where('node_id', $id)->exists();
+        if (!$known) abort(422, '节点不存在，也没有它的下发记录');
         $occurredAt = $this->str($request, 'occurred_at');
         $timestamp = is_numeric($occurredAt) ? (int)$occurredAt : strtotime($occurredAt);
         if (!$timestamp || $timestamp < 1 || $timestamp > time() + 60) abort(422, '异常时间无效');
@@ -354,51 +352,22 @@ class InsiderGuardController extends Controller
         ]);
     }
 
-    /** 异常前 24 小时到后 6 小时的健康探测与下发记录 */
+    /** 异常前 24 小时到后 6 小时的下发记录 */
     public function timeline(Request $request)
     {
         $incident = $this->incident($request);
         $start = (int)$incident->occurred_at - self::INCIDENT_BEFORE_SECONDS;
         $end = (int)$incident->occurred_at + self::INCIDENT_AFTER_SECONDS;
-        $health = DB::table('v2_insider_guard_health')
-            ->where('node_type', $incident->node_type)->where('node_id', $incident->node_id)
-            ->whereBetween('created_at', [$start, $end])
-            ->orderBy('created_at')->limit(self::TIMELINE_LIMIT)->get();
         $deliveries = $this->deliveriesAround($incident, $start, $end);
         $total = (clone $deliveries)->count();
         $rows = $deliveries->orderBy('last_at')->limit(self::TIMELINE_LIMIT)->get(['user_id', 'times', 'first_at', 'last_at']);
         return response([
             'data' => [
                 'incident' => $incident,
-                'health' => $health,
                 'deliveries' => $this->withEmails($rows),
                 'deliveries_total' => $total,
                 'disclaimer' => '仅为时间上的关联，不能据此认定泄露者。',
             ]
-        ]);
-    }
-
-    /** 最近的健康探测记录 */
-    public function health(Request $request)
-    {
-        $records = $this->withNodeNames(
-            DB::table('v2_insider_guard_health')->orderByDesc('id')->limit(self::HEALTH_RECORDS_LIMIT)->get()
-        );
-        return response([
-            'data' => [
-                'enabled' => (bool)InsiderGuardService::setting('health_enable', 0),
-                'records' => $records,
-                'note' => '仅检测 TCP 端口连通性，UDP/QUIC 节点不适用；开启后由定时任务每 5 分钟检测一次，只记录状态变化（状态不变时每小时补记一次）。',
-            ]
-        ]);
-    }
-
-    /** 立即探测一个节点（不触发 Telegram 告警） */
-    public function healthCheck(Request $request)
-    {
-        [$type, $id] = $this->node($request);
-        return response([
-            'data' => InsiderGuardService::healthOne($type, $id, null, false)
         ]);
     }
 

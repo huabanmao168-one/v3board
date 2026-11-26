@@ -4,8 +4,6 @@ import type {
   GuardCandidates,
   GuardEvent,
   GuardEventType,
-  GuardHealth,
-  GuardHealthCheckResult,
   GuardHours,
   GuardOverview,
   GuardReviewAction,
@@ -51,7 +49,3 @@ export const createNodeIncident = (params: {
 }) => post<boolean>(guardPath('nodeIncident'), params)
 export const fetchIncidentCandidates = (id: number) => get<GuardCandidates>(guardPath('candidates'), { id })
 export const fetchIncidentTimeline = (id: number) => get<GuardTimeline>(guardPath('timeline'), { id })
-export const fetchGuardHealth = () => get<GuardHealth>(guardPath('health'))
-/** 立即探测一个节点的 TCP 连通性（后端限流 10 次 / 分钟） */
-export const checkNodeHealth = (params: { node_type: NodeType; node_id: number }) =>
-  post<GuardHealthCheckResult>(guardPath('healthCheck'), params)

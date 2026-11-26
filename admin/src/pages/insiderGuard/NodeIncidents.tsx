@@ -1,18 +1,18 @@
 // 节点异常及候选账号（独占一个标签页）：每条异常一张小卡片（可展开候选账号 / 时间线），下方可折叠的「登记节点异常」表单
 import { useQuery } from '@tanstack/react-query'
-import { Button, DatePicker, Input, Tag, type TableColumnsType } from 'antd'
+import { Button, DatePicker, Input, type TableColumnsType } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useState } from 'react'
 import { unwrap } from '@/api/request'
 import { createNodeIncident, fetchIncidentCandidates, fetchIncidentTimeline } from '@/api/services/insiderGuard'
-import type { GuardCandidates, GuardHealthRecord, GuardIncident, GuardTimeline } from '@/api/types'
+import type { GuardCandidates, GuardIncident, GuardTimeline } from '@/api/types'
 import { message } from '@/app/staticApi'
 import { Loading } from '@/components/Loading'
 import { NodeSelect } from '@/components/NodeSelect'
 import { paginationProps } from '@/hooks/usePagedList'
 import { useUi } from '@/stores/appearance'
 import { parseNodeKey } from '@/utils/nodes'
-import { Ellipsis, Failed, guardKeys, guardTime, MUTED, NodeLabel, Note, Section, SubTable, userLabel } from './shared'
+import { Failed, guardKeys, guardTime, MUTED, NodeLabel, Note, Section, SubTable, userLabel } from './shared'
 
 interface NodeIncidentsProps {
   incidents: GuardIncident[]
@@ -125,25 +125,6 @@ function Candidates({ incidentId }: { incidentId: number }) {
   )
 }
 
-const healthColumns: TableColumnsType<GuardHealthRecord> = [
-  { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 170, render: (s: number) => guardTime(s) },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    key: 'status',
-    width: 80,
-    render: (status: GuardHealthRecord['status']) =>
-      status === 'up' ? <Tag color="green">up</Tag> : <Tag color="red">down</Tag>,
-  },
-  { title: '延迟', dataIndex: 'latency_ms', key: 'latency_ms', width: 90, render: (ms: number) => `${ms} ms` },
-  {
-    title: '错误',
-    dataIndex: 'error',
-    key: 'error',
-    render: (error: string | null) => <Ellipsis text={error} width={200} />,
-  },
-]
-
 type Delivery = GuardTimeline['deliveries'][number]
 const deliveryColumns: TableColumnsType<Delivery> = [
   { title: '首次下发', dataIndex: 'first_at', key: 'first_at', width: 170, render: (s: number) => guardTime(s) },
@@ -159,7 +140,7 @@ function deliveriesSummary(data: GuardTimeline | undefined) {
   return shown === total ? `共 ${total} 个账号` : `显示 ${shown} / 共 ${total} 个账号`
 }
 
-/** 时间线：异常前 24 小时到后 6 小时的健康探测与下发记录概览 */
+/** 时间线：异常前 24 小时到后 6 小时的下发记录概览 */
 function Timeline({ incidentId }: { incidentId: number }) {
   const ui = useUi()
   const query = useQuery({
@@ -167,7 +148,6 @@ function Timeline({ incidentId }: { incidentId: number }) {
     queryFn: () => unwrap(fetchIncidentTimeline(incidentId)),
   })
   const data = query.data
-  const down = data?.health.filter((h) => h.status === 'down').length ?? 0
   // 同候选账号：收起再点开会重新请求；读到过数据时照常显示
   if (query.isError && !data) {
     return <Failed>读取失败：时间线暂时无法加载，收起后再点开重试</Failed>
@@ -175,19 +155,6 @@ function Timeline({ incidentId }: { incidentId: number }) {
   return (
     <Loading loading={query.isLoading}>
       <div style={{ marginTop: 12 }}>
-        <div style={{ fontWeight: 'bold', marginBottom: 6 }}>
-          健康探测{' '}
-          <span style={MUTED}>
-            共 {data?.health.length ?? 0} 条，其中 down {down} 条
-          </span>
-        </div>
-        <SubTable<GuardHealthRecord>
-          dataSource={data?.health ?? []}
-          columns={healthColumns}
-          scroll={{ x: 540 }}
-          pagination={{ ...paginationProps(ui), defaultPageSize: 20, hideOnSinglePage: true }}
-          style={{ marginBottom: 12 }}
-        />
         <div style={{ fontWeight: 'bold', marginBottom: 6 }}>
           订阅下发 <span style={MUTED}>{deliveriesSummary(data)}</span>
         </div>

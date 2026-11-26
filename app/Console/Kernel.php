@@ -48,10 +48,6 @@ class Kernel extends ConsoleKernel
         // horizon metrics
         $schedule->command('horizon:snapshot')->everyFiveMinutes();
         // insider guard（风控中心）
-        $schedule->command('insider-guard:health')->everyFiveMinutes()->withoutOverlapping(60)
-            ->when(function () {
-                return (int) config('v2board.insider_guard_health_enable', 0) === 1;
-            });
         $schedule->command('insider-guard:cleanup')->hourly()->withoutOverlapping(30);
     }
 

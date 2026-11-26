@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * 风控中心（InsiderGuard）：登录 / 订阅审计、风险评分、节点 TCP 健康探测、告警与清理。
+ * 风控中心（InsiderGuard）：登录 / 订阅审计、风险评分、清理。
  * 采集点三处：AuthController::login 成功后、ClientController 与 AppController 拿到可下发节点后；写入失败只记日志，不影响业务。
  * 节点用 (node_type, node_id) 定位，因为各协议表的 id 互相独立。
  *
@@ -26,7 +26,6 @@ use Illuminate\Support\Facades\Log;
  *   - 活动表按小时合并：同一用户、同一类型、同一小时、同一 IP、同一 UA 只有一行并计数，客户端再频繁轮询也封顶；
  *     同一小时桶数超过上限后合并到溢出桶，随机 UA / 伪造 IP 也刷不大；UA 文本放字典表，活动行只存哈希
  *   - 节点下发表每人每节点一行（首次 / 最近时间 + 次数），总行数封顶为用户数 × 节点数
- *   - 健康探测只在状态变化时落库，状态不变时每小时补记一行
  *   - 清理任务每小时按保留天数删除过期记录
  *
  * 限制：订阅和客户端配置仅下发提示节点，解除后恢复。
@@ -35,9 +34,6 @@ class InsiderGuardService
 {
     const EVENT_LOGIN = 'login';
     const EVENT_SUBSCRIPTION = 'subscription';
-    // UDP / QUIC 协议不做 TCP 探测：按节点类型，v2node 再看 protocol 字段
-    const UDP_TYPES = ['hysteria', 'tuic'];
-    const UDP_PROTOCOLS = ['hysteria', 'hysteria2', 'tuic'];
     // 同一用户、同一节点集合在这个窗口内只记一次下发；查「异常前 24h 内被下发过」时要把这个窗口加进查询下界，否则边界上会漏
     const DELIVERY_DEDUP_SECONDS = 6 * 3600;
     // 活动按这个粒度合并
@@ -46,8 +42,6 @@ class InsiderGuardService
     const BUCKETS_PER_HOUR_LIMIT = 30;
     // UA 字典每个 UA 在这个窗口内只写一次（更新 last_seen）
     const UA_SEEN_SECONDS = 86400;
-    // 健康探测状态不变时，每隔这么久补记一行
-    const HEALTH_HEARTBEAT_SECONDS = 3600;
     // 清理时每批删除的行数
     const CLEANUP_BATCH = 5000;
     // 评分：最近 1 小时订阅次数 > 20 记 25 分，来源 IP 数 > 8 记 25 分，最高 50 分
@@ -58,8 +52,6 @@ class InsiderGuardService
     // 设置默认值（与 ConfigController::fetch、前端 GuardSettings 一致）；高风险阈值 50 与「需人工复核」一致
     const DEFAULT_RISK_THRESHOLD = 50;
     const DEFAULT_RETENTION_DAYS = 3;
-    const DEFAULT_HEALTH_TIMEOUT = 2;
-    const DEFAULT_ALERT_COOLDOWN_MINUTES = 120;
     // 被限制用户的 ID 集合整体缓存（限制表很小），限制 / 解除后主动清
     const RESTRICT_CACHE_KEY = 'insider_guard_restricted_ids';
     const RESTRICT_CACHE_SECONDS = 300;
@@ -289,19 +281,6 @@ class InsiderGuardService
             + ($ips > self::SCORE_IPS_THRESHOLD ? self::SCORE_POINTS : 0));
     }
 
-    /** 告警（同一事件在冷却时间内只发一次），通过 Telegram 发给绑定了 Telegram 的管理员 */
-    public static function alert(string $message, string $key): void
-    {
-        $minutes = max(10, (int)self::setting('alert_cooldown_minutes', self::DEFAULT_ALERT_COOLDOWN_MINUTES));
-        try {
-            // 缓存不可用时当作冷却中，不发也不抛（调用方正在探测，不能因此把节点记成 error）
-            if (!Cache::add('insider_guard_alert:' . hash('sha256', $key), 1, $minutes * 60)) return;
-            (new TelegramService())->sendMessageWithAdmin($message);
-        } catch (\Throwable $e) {
-            Log::warning('InsiderGuard alert failed', ['error' => $e->getMessage()]);
-        }
-    }
-
     /** 全部节点的 "type:id" => 名称 映射；只查 id、name，不走 ServerService 的流量 / 状态合并 */
     public static function nodeNames(): array
     {
@@ -314,97 +293,7 @@ class InsiderGuardService
         return $names;
     }
 
-    /**
-     * 探测一个节点的 TCP 连通性并记录（只记状态变化，状态不变时每小时补记一行）；
-     * $alert 为真时连续两次失败告警（定时任务用；后台手动检测不告警）
-     */
-    public static function healthOne(string $type, int $id, ?array $server = null, bool $alert = true): array
-    {
-        $result = ['node_type' => $type, 'node_id' => $id];
-        if (!self::setting('health_enable', 0)) {
-            return $result + ['status' => 'disabled', 'message' => '请先在风控中心设置里开启节点健康检查'];
-        }
-        if ($server === null) {
-            $model = (new ServerService())->getServer($id, $type);
-            if (!$model) return $result + ['status' => 'error', 'message' => '节点不存在'];
-            $server = $model->toArray();
-            $server['type'] = $type;
-        }
-        $result['name'] = (string)($server['name'] ?? '');
-        if (in_array($type, self::UDP_TYPES, true)
-            || ($type === 'v2node' && in_array(strtolower((string)($server['protocol'] ?? '')), self::UDP_PROTOCOLS, true))) {
-            return $result + ['status' => 'skipped', 'message' => 'UDP/QUIC 节点不支持 TCP 探测'];
-        }
-        // IPv6 可能带方括号，校验前去掉，拼目标地址时再补
-        $host = trim(trim((string)($server['host'] ?? '')), '[]');
-        $portRaw = (string)(!empty($server['port']) ? $server['port'] : ($server['server_port'] ?? ''));
-        if ($host === '' || preg_match('/[\s\/\?#@]/', $host)
-            || (!filter_var($host, FILTER_VALIDATE_IP) && !filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))) {
-            return $result + ['status' => 'skipped', 'message' => '节点地址不是可探测的单一域名或 IP'];
-        }
-        if (!preg_match('/^\d+$/', $portRaw) || (int)$portRaw < 1 || (int)$portRaw > 65535) {
-            return $result + ['status' => 'skipped', 'message' => '节点端口无效或为端口范围'];
-        }
-        $port = (int)$portRaw;
-        $timeout = max(1, min(5, (int)self::setting('health_timeout', self::DEFAULT_HEALTH_TIMEOUT)));
-        $target = 'tcp://' . (strpos($host, ':') !== false ? '[' . $host . ']' : $host) . ':' . $port;
-        $start = microtime(true);
-        $errno = 0;
-        $err = '';
-        $fp = @stream_socket_client($target, $errno, $err, $timeout, STREAM_CLIENT_CONNECT);
-        $status = $fp ? 'up' : 'down';
-        if ($fp) fclose($fp);
-        $latency = (int)round((microtime(true) - $start) * 1000);
-        // 系统错误文本可能不是 UTF-8，写库与返回 JSON 都要先清洗
-        $error = $fp ? null : mb_substr(mb_convert_encoding((string)$err, 'UTF-8', 'UTF-8'), 0, 180);
-        $prior = DB::table('v2_insider_guard_health')
-            ->where('node_type', $type)->where('node_id', $id)
-            ->orderByDesc('created_at')->orderByDesc('id')->first(['status', 'created_at']);
-        if (!$prior || $prior->status !== $status || (int)$prior->created_at < time() - self::HEALTH_HEARTBEAT_SECONDS) {
-            DB::table('v2_insider_guard_health')->insert([
-                'node_id' => $id,
-                'node_type' => $type,
-                'status' => $status,
-                'latency_ms' => $latency,
-                'error' => $error,
-                'created_at' => time(),
-            ]);
-        }
-        if ($alert && $status === 'down' && $prior && $prior->status === 'down') {
-            self::alert(
-                "InsiderGuard：节点 TCP 连续探测失败 [{$type}#{$id}] {$result['name']} {$host}:{$port}",
-                "health-{$type}-{$id}"
-            );
-        }
-        return $result + ['status' => $status, 'latency_ms' => $latency, 'error' => $error];
-    }
-
-    /** 探测全部显示中的节点 */
-    public static function health(): array
-    {
-        if (!self::setting('health_enable', 0)) {
-            return ['disabled' => true, 'message' => '请先在风控中心设置里开启节点健康检查'];
-        }
-        $results = [];
-        foreach ((new ServerService())->getAllServers() as $server) {
-            if (empty($server['show'])) continue;
-            $type = (string)$server['type'];
-            $id = (int)$server['id'];
-            try {
-                $results[] = self::healthOne($type, $id, $server);
-            } catch (QueryException $e) {
-                // 表不存在之类的数据库错误不是单个节点的问题，交给命令层提示
-                throw $e;
-            } catch (\Throwable $e) {
-                Log::warning('InsiderGuard node probe failed', ['node' => "{$type}:{$id}", 'error' => $e->getMessage()]);
-                $results[] = ['node_type' => $type, 'node_id' => $id, 'status' => 'error', 'message' => '检查发生异常，请查看 Laravel 日志'];
-            }
-            if (count($results) >= 1000) break;
-        }
-        return ['checked' => count($results), 'results' => $results];
-    }
-
-    /** 清理过期的活动 / 节点下发 / 健康 / UA 字典记录（保留 1～365 天）与已删除用户的限制记录，由定时任务每小时调用 */
+    /** 清理过期的活动 / 节点下发 / UA 字典记录（保留 1～365 天）与已删除用户的限制记录，由定时任务每小时调用 */
     public static function cleanup(): array
     {
         $days = max(1, min(365, (int)self::setting('retention_days', self::DEFAULT_RETENTION_DAYS)));
@@ -413,7 +302,6 @@ class InsiderGuardService
             'v2_insider_guard_activity' => ['last_at', $cutoff, 'id'],
             'v2_insider_guard_subscription_block' => ['last_at', $cutoff, 'id'],
             'v2_insider_guard_node_user' => ['last_at', $cutoff, 'id'],
-            'v2_insider_guard_health' => ['created_at', $cutoff, 'id'],
             // UA 的 last_seen 最多比引用它的活动晚一天更新，多留一天，避免还在保留期内的活动查不到 UA
             'v2_insider_guard_ua' => ['last_seen', $cutoff - self::UA_SEEN_SECONDS, 'ua_hash'],
         ];
