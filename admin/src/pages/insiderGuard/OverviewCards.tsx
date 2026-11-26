@@ -48,12 +48,6 @@ export function OverviewCards({ overview, highRisk, hoursText, loading, failed }
         <Card icon="fa-bolt" label="近 24 小时事件" value={value(overview?.recent_events)} hint="登录与订阅拉取" />
         <Card icon="fa-clipboard-check" label="人工审核总数" value={value(overview?.reviews)} />
         <Card icon="fa-ban" label="限制中账号" value={value(overview?.restricted)} hint="禁止更新订阅" />
-        <Card
-          icon="fa-exclamation-triangle"
-          label="节点异常事件"
-          value={value(overview?.incidents.length)}
-          hint="最近登记的 20 条"
-        />
         <Card icon="fa-user-shield" label="高风险账号" value={value(highRisk)} hint={hoursText} />
       </div>
       {!!overview?.top_ips?.length && <div className="table-responsive">

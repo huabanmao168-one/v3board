@@ -20,8 +20,6 @@ export const guardKeys = {
   events: ['insiderGuard', 'events'],
   restricted: ['insiderGuard', 'restricted'],
   userDetail: ['insiderGuard', 'userDetail'],
-  candidates: (incidentId: number) => ['insiderGuard', 'candidates', incidentId] as const,
-  timeline: (incidentId: number) => ['insiderGuard', 'timeline', incidentId] as const,
   config: ['config', 'insider_guard'],
 } as const
 

@@ -188,9 +188,11 @@ class AdminRoute
             $router->post('/insiderGuard/review', 'V1\\Admin\\InsiderGuardController@review');
             $router->post('/insiderGuard/restrict', 'V1\\Admin\\InsiderGuardController@restrict');
             $router->post('/insiderGuard/release', 'V1\\Admin\\InsiderGuardController@release');
-            $router->post('/insiderGuard/nodeIncident', 'V1\\Admin\\InsiderGuardController@nodeIncident');
-            $router->get ('/insiderGuard/candidates', 'V1\\Admin\\InsiderGuardController@candidates');
-            $router->get ('/insiderGuard/timeline', 'V1\\Admin\\InsiderGuardController@timeline');
+            $router->get ('/insiderGuard/whitelist', 'V1\\Admin\\InsiderGuardManageController@whitelist');
+            $router->post('/insiderGuard/whitelistAdd', 'V1\\Admin\\InsiderGuardManageController@whitelistAdd');
+            $router->post('/insiderGuard/whitelistRemove', 'V1\\Admin\\InsiderGuardManageController@whitelistRemove');
+            $router->post('/insiderGuard/resetSubscription', 'V1\\Admin\\InsiderGuardManageController@resetSubscription');
+            $router->get ('/insiderGuard/devices', 'V1\\Admin\\InsiderGuardManageController@devices');
         });
     }
 }

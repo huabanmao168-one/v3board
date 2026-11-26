@@ -38,6 +38,12 @@ interface GuardConfig extends Record<IngressListKey, string>, Record<IngressSwit
   insider_guard_risk_threshold: number
   /** 审计记录保留天数 1～365 */
   insider_guard_retention_days: number
+  /** 自动处置：连续超阈值时 Telegram 通知管理员 0 / 1 */
+  insider_guard_auto_notify: number
+  /** 自动处置：连续超阈值时自动限制订阅 0 / 1 */
+  insider_guard_auto_restrict: number
+  /** 自动处置：连续命中的检测周期数 1～20（每 5 分钟一个周期） */
+  insider_guard_auto_periods: number
 }
 
 type NumberKey = Exclude<keyof GuardConfig, 'subscribe_ingress_cloud_providers' | IngressListKey>
@@ -52,6 +58,9 @@ const DEFAULTS: GuardConfig = {
   subscribe_ingress_block_browser: 0,
   insider_guard_risk_threshold: 50,
   insider_guard_retention_days: 3,
+  insider_guard_auto_notify: 0,
+  insider_guard_auto_restrict: 0,
+  insider_guard_auto_periods: 3,
 }
 
 /** 后端返回的值可能是字符串，统一转成整数；不是数字时用默认值 */
@@ -71,6 +80,9 @@ function normalize(raw: Record<string, unknown> | undefined): GuardConfig {
     subscribe_ingress_block_browser: int('subscribe_ingress_block_browser'),
     insider_guard_risk_threshold: int('insider_guard_risk_threshold'),
     insider_guard_retention_days: int('insider_guard_retention_days'),
+    insider_guard_auto_notify: int('insider_guard_auto_notify'),
+    insider_guard_auto_restrict: int('insider_guard_auto_restrict'),
+    insider_guard_auto_periods: int('insider_guard_auto_periods'),
   }
 }
 
@@ -143,6 +155,9 @@ function SettingsForm({ initial, raw }: { initial: GuardConfig; raw?: Record<str
     if (form.insider_guard_retention_days < 1 || form.insider_guard_retention_days > 365) {
       return message.error('审计保留天数需在 1～365 之间')
     }
+    if (form.insider_guard_auto_periods < 1 || form.insider_guard_auto_periods > 20) {
+      return message.error('连续命中周期需在 1～20 之间')
+    }
     setSaving(true)
     const res = await saveConfig(form, true)
     setSaving(false)
@@ -208,6 +223,35 @@ function SettingsForm({ initial, raw }: { initial: GuardConfig; raw?: Record<str
           onChange={(v) => set('insider_guard_retention_days', v)}
         />
         <Unit>天</Unit>
+      </Row>
+      <Row
+        title="超阈值通知"
+        description="账号风险评分连续达到高风险阈值后，通过 Telegram 通知已绑定的管理员，同一账号 2 小时内只通知一次。白名单和已限制账号不触发"
+      >
+        <Switch
+          aria-label="超阈值通知"
+          checked={form.insider_guard_auto_notify === 1}
+          onChange={(checked) => set('insider_guard_auto_notify', checked ? 1 : 0)}
+        />
+      </Row>
+      <Row
+        title="超阈值自动限制"
+        description="连续超阈值的账号自动限制订阅并留下审核记录，可在「限制中」标签页解除。共享出口、NAT 可能造成误报，建议先只开通知观察"
+      >
+        <Switch
+          aria-label="超阈值自动限制"
+          checked={form.insider_guard_auto_restrict === 1}
+          onChange={(checked) => set('insider_guard_auto_restrict', checked ? 1 : 0)}
+        />
+      </Row>
+      <Row title="连续命中周期" description="每 5 分钟检测一次，连续命中这么多个周期才触发通知或限制，1～20，默认 3">
+        <InputNumber
+          min={1}
+          max={20}
+          value={form.insider_guard_auto_periods}
+          onChange={(v) => set('insider_guard_auto_periods', v)}
+        />
+        <Unit>个周期</Unit>
       </Row>
       <div style={{ padding: '16px 0' }}>
         <Button type="primary" loading={saving} onClick={() => void save()}>

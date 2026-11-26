@@ -1,7 +1,6 @@
 import { adminPath } from '@/app/settings'
 import { get, post } from '../request'
 import type {
-  GuardCandidates,
   GuardEvent,
   GuardEventType,
   GuardHours,
@@ -9,9 +8,9 @@ import type {
   GuardReviewAction,
   GuardRestrictedUser,
   GuardRiskUser,
-  GuardTimeline,
   GuardUserDetail,
-  NodeType,
+  GuardWhitelistUser,
+  GuardDevice,
 } from '../types'
 
 // 风控中心（v3board 独有接口）：GET 用 query，POST 用表单；节点一律用 node_type + node_id 标识
@@ -40,12 +39,12 @@ export const restrictGuardUser = (params: { id: number; reason: string }) =>
   post<boolean>(guardPath('restrict'), { ...params, confirm: 1 })
 /** 解除限制：恢复真实入口；原因 8～1000 字 */
 export const releaseGuardUser = (params: { id: number; reason: string }) => post<boolean>(guardPath('release'), params)
-/** 登记节点异常：occurred_at 为 unix 秒，reason 1000 字以内 */
-export const createNodeIncident = (params: {
-  node_type: NodeType
-  node_id: number
-  occurred_at: number
-  reason: string
-}) => post<boolean>(guardPath('nodeIncident'), params)
-export const fetchIncidentCandidates = (id: number) => get<GuardCandidates>(guardPath('candidates'), { id })
-export const fetchIncidentTimeline = (id: number) => get<GuardTimeline>(guardPath('timeline'), { id })
+/** 白名单（服务端分页，顶层 total）：不参与风险评分与自动处置 */
+export const fetchGuardWhitelist = (params: { current: number; pageSize: number }) =>
+  get<GuardWhitelistUser[]>(guardPath('whitelist'), params)
+export const addGuardWhitelist = (params: { id: number; reason: string }) => post<boolean>(guardPath('whitelistAdd'), params)
+export const removeGuardWhitelist = (id: number) => post<boolean>(guardPath('whitelistRemove'), { id })
+/** 重置订阅：换 token 和 uuid，旧链接立即失效 */
+export const resetGuardSubscription = (id: number) => post<boolean>(guardPath('resetSubscription'), { id })
+/** 用户设备视图：最近 24 小时按 UA 汇总的订阅活动 */
+export const fetchGuardDevices = (id: number) => get<GuardDevice[]>(guardPath('devices'), { id })

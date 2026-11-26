@@ -4,7 +4,7 @@ import { GeoIpPanel } from './GeoIpPanel'
 //   - 概览：统计卡片 + 风险用户表，时段下拉同时决定「高风险账号」卡片与表格
 //   - 风险用户表的「详情」切到「用户详情」标签页并查询该用户；「审核」与用户详情里的「审核此用户」都是弹窗（ReviewModal，
 //     含限制 / 解除限制）
-//   - 登记节点异常 / 保存审核成功后刷新概览；保存审核后同时刷新风险用户表（限制标记）与「用户风险详情」（审核记录、限制状态）
+//   - 保存审核成功后刷新概览；保存审核后同时刷新风险用户表（限制标记）与「用户风险详情」（审核记录、限制状态）
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { useRefetch } from '@/api/queries'
@@ -14,16 +14,16 @@ import type { GuardHours } from '@/api/types'
 import { V2Tabs, type V2TabItem } from '@/components/V2Tabs'
 import { AdminLayout } from '@/layouts/AdminLayout'
 import { GuardSettings } from './GuardSettings'
-import { NodeIncidents } from './NodeIncidents'
 import { OverviewCards } from './OverviewCards'
 import { SubscriptionBlocks } from './SubscriptionBlocks'
 import { RecentEvents } from './RecentEvents'
 import { RestrictedUsers } from './RestrictedUsers'
+import { Whitelist } from './Whitelist'
 import { RiskUsers } from './RiskUsers'
 import { guardKeys, hoursLabel, Note, useGuardUsers } from './shared'
 import { UserRiskDetail } from './UserRiskDetail'
 
-type TabKey = 'overview' | 'restricted' | 'events' | 'blocks' | 'incidents' | 'detail' | 'geoip' | 'settings'
+type TabKey = 'overview' | 'restricted' | 'whitelist' | 'events' | 'blocks' | 'detail' | 'geoip' | 'settings'
 
 /** 标签页内容区：与系统配置页一样放在 block-content 里（有内边距） */
 function Pane({ children }: { children: ReactNode }) {
@@ -85,6 +85,15 @@ export default function InsiderGuardPage() {
       ),
     },
     {
+      key: 'whitelist',
+      label: '白名单',
+      children: (
+        <Pane>
+          <Whitelist onChanged={reviewed} />
+        </Pane>
+      ),
+    },
+    {
       key: 'events',
       label: '最近事件',
       children: (
@@ -94,20 +103,6 @@ export default function InsiderGuardPage() {
       ),
     },
     { key: 'blocks', label: '订阅拦截', children: <Pane><SubscriptionBlocks /></Pane> },
-    {
-      key: 'incidents',
-      label: '节点异常',
-      children: (
-        <Pane>
-          <NodeIncidents
-            incidents={overview.data?.incidents ?? []}
-            loading={overview.isLoading}
-            failed={overview.isError}
-            onChanged={() => void refetchOverview()}
-          />
-        </Pane>
-      ),
-    },
     {
       key: 'detail',
       label: '用户详情',

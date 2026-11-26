@@ -451,18 +451,6 @@ export interface NodeWhitelistRule {
 
 // 以下为风控中心（v3board 独有，insiderGuard/*）的类型：节点一律用 node_type + node_id 标识，时间为 unix 秒
 
-/** 节点异常记录；node_name 由后端按节点列表解析（overview、candidates、timeline 里都有） */
-export interface GuardIncident {
-  id: number
-  node_id: number
-  node_type: NodeType
-  node_name?: string | null
-  occurred_at: number
-  reason: string
-  admin_id: number
-  created_at: number
-}
-
 /** 概览（insiderGuard/overview） */
 export interface GuardOverview {
   top_ips?: Array<{ ip_address: string; ip_location: string | null; ip_isp: string | null; requests: number | string }>
@@ -472,7 +460,6 @@ export interface GuardOverview {
   reviews: number
   /** 限制中（禁止更新订阅）的账号数 */
   restricted: number
-  incidents: GuardIncident[]
 }
 
 /** 风险用户统计时段（小时） */
@@ -570,20 +557,21 @@ export interface GuardUserDetail {
   reviews: GuardReview[]
 }
 
-/** 节点异常的候选账号（insiderGuard/candidates）：异常前 24 小时被下发过该节点的账号，每人一行；caveat 文案由后端给 */
-export interface GuardCandidates {
-  incident: GuardIncident
-  candidates: Array<{ user_id: number; email: string | null; times: number; first_at: number; last_at: number }>
-  caveat: string
+/** 白名单用户（insiderGuard/whitelist），响应顶层另有 total */
+export interface GuardWhitelistUser {
+  user_id: number
+  email: string | null
+  admin_id: number | null
+  reason: string
+  created_at: number
 }
 
-/**
- * 节点异常时间线（insiderGuard/timeline）：异常前 24 小时到后 6 小时按首次 / 最近下发时间估算
- * 在该时段内被下发过该节点的账号（每人一行，按最近下发时间升序，最多 500 行；deliveries_total 为时段内的账号总数）
- */
-export interface GuardTimeline {
-  incident: GuardIncident
-  deliveries: Array<{ user_id: number; email: string | null; times: number; first_at: number; last_at: number }>
-  deliveries_total: number
-  disclaimer: string
+/** 用户设备（insiderGuard/devices）：最近 24 小时按 UA 汇总 */
+export interface GuardDevice {
+  ua: string | null
+  ua_hash: string
+  pulls: number
+  ips: number
+  locations: string[]
+  last_at: number
 }

@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * 风控中心：风险用户、活动记录、节点异常与候选账号、人工审核与限制。
+ * 风控中心：风险用户、活动记录、人工审核与限制。
  * 节点一律用 node_type + node_id 标识。活动表按小时合并（见 InsiderGuardService），时间字段为 first_at / last_at。
  */
 class InsiderGuardController extends Controller
@@ -22,23 +22,17 @@ class InsiderGuardController extends Controller
     /** 活动记录对外的字段（联表取 UA 文本） */
     const ACTIVITY_COLUMNS = ['a.id', 'a.user_id', 'a.event_type', 'a.ip_address', 'a.ip_location', 'a.ip_isp', 'a.ip_usage', 'a.ua_hash', 'a.node_count', 'a.times', 'a.first_at', 'a.last_at', 'ua.ua'];
     const REVIEW_ACTIONS = ['watch', 'clear', 'restrict_recommended'];
-    const NODE_TYPES = ['shadowsocks', 'vmess', 'vless', 'trojan', 'tuic', 'hysteria', 'anytls', 'v2node'];
-    // 概览「近 24 小时」；节点异常的候选账号 / 时间线窗口：异常前 24 小时、后 6 小时
+    // 概览「近 24 小时」
     const OVERVIEW_WINDOW_SECONDS = 86400;
-    const INCIDENT_BEFORE_SECONDS = 86400;
-    const INCIDENT_AFTER_SECONDS = 6 * 3600;
     // 风险用户最多返回这么多人；时段 ≥ 24 小时要扫几天的活动，聚合结果缓存一分钟；概览的 24 小时总数缓存两分钟
     const USERS_LIMIT = 500;
     const USERS_CACHE_FROM_HOURS = 24;
     const USERS_CACHE_SECONDS = 60;
     const OVERVIEW_CACHE_SECONDS = 120;
     // 各列表上限
-    const INCIDENTS_LIMIT = 20;
     const USER_EVENTS_LIMIT = 100;
     const USER_NODES_LIMIT = 100;
     const USER_REVIEWS_LIMIT = 30;
-    const CANDIDATES_LIMIT = 100;
-    const TIMELINE_LIMIT = 500;
     // int(11) 列能存的最大 ID
     const MAX_ID = 2147483647;
 
@@ -78,9 +72,6 @@ class InsiderGuardController extends Controller
 
     public function overview(Request $request)
     {
-        $incidents = $this->withNodeNames(
-            DB::table('v2_insider_guard_incident')->orderByDesc('id')->limit(self::INCIDENTS_LIMIT)->get()
-        );
         // 近 24 小时活动总数要扫整个窗口，缓存两分钟；审核数、限制数、异常列表都是小表，实时
         $recent = Cache::remember('insider_guard_overview_recent', self::OVERVIEW_CACHE_SECONDS, function () {
             return (int)DB::table('v2_insider_guard_activity')
@@ -99,7 +90,6 @@ class InsiderGuardController extends Controller
                 'top_ips' => $top,
                 'reviews' => DB::table('v2_insider_guard_review')->count(),
                 'restricted' => DB::table('v2_insider_guard_restrict')->count(),
-                'incidents' => $incidents,
             ]
         ]);
     }
@@ -138,12 +128,15 @@ class InsiderGuardController extends Controller
         $restricted = $userIds
             ? DB::table('v2_insider_guard_restrict')->whereIn('user_id', $userIds)->pluck('user_id')->flip()->all()
             : [];
+        $whitelisted = $userIds
+            ? DB::table('v2_insider_guard_whitelist')->whereIn('user_id', $userIds)->pluck('user_id')->flip()->all()
+            : [];
         // SQL 已按「超阈值维度数 DESC, pulls DESC」排好，等于评分降序，这里不再排
-        $items = collect($rows)->map(function ($r) use ($threshold, $restricted) {
+        $items = collect($rows)->map(function ($r) use ($threshold, $restricted, $whitelisted) {
             $score = InsiderGuardService::calcScore($r['pulls'], $r['ips']);
             return $r + [
                 'score' => $score,
-                'high_risk' => $score >= $threshold,
+                'high_risk' => $score >= $threshold && !isset($whitelisted[$r['user_id']]),
                 'restricted' => isset($restricted[$r['user_id']]),
             ];
         })->values();
@@ -307,70 +300,6 @@ class InsiderGuardController extends Controller
         ]);
     }
 
-    /** 登记节点异常（如节点被封） */
-    public function nodeIncident(Request $request)
-    {
-        [$type, $id] = $this->node($request);
-        // 节点被封后可能已经删掉了，只要下发记录里还有它就允许登记，否则多半是填错了
-        $known = (new ServerService())->getServer($id, $type)
-            || DB::table('v2_insider_guard_node_user')->where('node_type', $type)->where('node_id', $id)->exists();
-        if (!$known) abort(422, '节点不存在，也没有它的下发记录');
-        $occurredAt = $this->str($request, 'occurred_at');
-        $timestamp = is_numeric($occurredAt) ? (int)$occurredAt : strtotime($occurredAt);
-        if (!$timestamp || $timestamp < 1 || $timestamp > time() + 60) abort(422, '异常时间无效');
-        $reason = trim($this->str($request, 'reason'));
-        if ($reason === '' || mb_strlen($reason) > 1000) abort(422, '请填写异常描述（1000 字以内）');
-        DB::table('v2_insider_guard_incident')->insert([
-            'node_id' => $id,
-            'node_type' => $type,
-            'occurred_at' => $timestamp,
-            'reason' => $reason,
-            'admin_id' => (int)$request->user['id'],
-            'created_at' => time(),
-        ]);
-        return response([
-            'data' => true
-        ]);
-    }
-
-    /** 异常前 24 小时内被下发过该节点的账号（仅为关联线索） */
-    public function candidates(Request $request)
-    {
-        $incident = $this->incident($request);
-        $end = (int)$incident->occurred_at;
-        $rows = $this->deliveriesAround($incident, $end - self::INCIDENT_BEFORE_SECONDS, $end)
-            // 最近一次下发在异常之前的账号更有参考价值，排前面
-            ->orderByRaw('CASE WHEN last_at <= ? THEN 0 ELSE 1 END, last_at DESC', [$end])
-            ->limit(self::CANDIDATES_LIMIT)
-            ->get(['user_id', 'times', 'first_at', 'last_at']);
-        return response([
-            'data' => [
-                'incident' => $incident,
-                'candidates' => $this->withEmails($rows),
-                'caveat' => '这些账号在异常前 24 小时内被下发过该节点（按首次与最近下发时间估算），不能证明节点由某个人泄露。',
-            ]
-        ]);
-    }
-
-    /** 异常前 24 小时到后 6 小时的下发记录 */
-    public function timeline(Request $request)
-    {
-        $incident = $this->incident($request);
-        $start = (int)$incident->occurred_at - self::INCIDENT_BEFORE_SECONDS;
-        $end = (int)$incident->occurred_at + self::INCIDENT_AFTER_SECONDS;
-        $deliveries = $this->deliveriesAround($incident, $start, $end);
-        $total = (clone $deliveries)->count();
-        $rows = $deliveries->orderBy('last_at')->limit(self::TIMELINE_LIMIT)->get(['user_id', 'times', 'first_at', 'last_at']);
-        return response([
-            'data' => [
-                'incident' => $incident,
-                'deliveries' => $this->withEmails($rows),
-                'deliveries_total' => $total,
-                'disclaimer' => '仅为时间上的关联，不能据此认定泄露者。',
-            ]
-        ]);
-    }
-
     /** 正整数且不超过 int(11)，否则 null（数组、负数、超大数都拒绝） */
     private function positiveInt($value): ?int
     {
@@ -410,36 +339,6 @@ class InsiderGuardController extends Controller
             'reason' => $reason,
             'created_at' => time(),
         ]);
-    }
-
-    private function node(Request $request): array
-    {
-        $type = $this->str($request, 'node_type');
-        $id = $this->positiveInt($request->input('node_id'));
-        if ($id === null || !in_array($type, self::NODE_TYPES, true)) abort(422, '节点类型或 ID 无效');
-        return [$type, $id];
-    }
-
-    private function incident(Request $request)
-    {
-        $id = $this->positiveInt($request->input('id'));
-        $incident = $id ? DB::table('v2_insider_guard_incident')->find($id) : null;
-        if (!$incident) abort(500, '异常记录不存在');
-        $this->withNodeNames(collect([$incident]));
-        return $incident;
-    }
-
-    /**
-     * 在 [$from, $to] 窗口内被下发过该节点的账号：每人每节点只有一行（首次 / 最近下发时间），
-     * 首次在窗口结束前、最近在窗口开始之后即视为窗口内被下发过；下发记录有去重窗口，下界再往前推一个窗口
-     */
-    private function deliveriesAround($incident, int $from, int $to)
-    {
-        return DB::table('v2_insider_guard_node_user')
-            ->where('node_type', $incident->node_type)
-            ->where('node_id', $incident->node_id)
-            ->where('first_at', '<=', $to)
-            ->where('last_at', '>=', $from - InsiderGuardService::DELIVERY_DEDUP_SECONDS);
     }
 
     /** 当前的限制记录，未限制为 null */
