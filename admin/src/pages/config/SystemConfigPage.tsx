@@ -606,17 +606,6 @@ export default function SystemConfigPage() {
       label: '邮件',
       children: (
         <>
-          <ConfigItem title="Sub-Panel 上报 URL" description="从 Sub-Panel 机场管理的接入代码复制。配置后，订阅拉取时会上报用户邮箱和订阅数据。留空关闭上报。">
-            {input('email', 'sub_panel_report_url', 'https://example.com/r/report_id')}
-          </ConfigItem>
-          <ConfigItem title="Sub-Panel 上报密钥" description="填写 Sub-Panel 设置中的上报密钥">
-            <input
-              type="password"
-              className="form-control"
-              value={selected(email.sub_panel_report_key)}
-              onChange={(e) => set('email', 'sub_panel_report_key')(e.target.value)}
-            />
-          </ConfigItem>
           <Alert>如果你更改了本页配置，需要对队列服务进行重启。另外本页配置优先级高于.env中邮件配置。</Alert>
           <div className="">
             <ConfigItem title="SMTP服务器地址" description="由邮件服务商提供的服务地址">

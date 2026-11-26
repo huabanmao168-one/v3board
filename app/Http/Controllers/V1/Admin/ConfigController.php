@@ -149,8 +149,6 @@ class ConfigController extends Controller
                 'email_password' => config('v2board.email_password'),
                 'email_encryption' => config('v2board.email_encryption'),
                 'email_from_address' => config('v2board.email_from_address'),
-                'sub_panel_report_url' => config('v2board.sub_panel_report_url'),
-                'sub_panel_report_key' => config('v2board.sub_panel_report_key'),
             ],
             'email_remind' => [
                 'remind_expire_days' => (int) config('v2board.remind_expire_days', 1),

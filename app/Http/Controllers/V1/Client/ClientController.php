@@ -18,7 +18,6 @@ use App\Services\SubscriptionNotice;
 use App\Services\UserService;
 use App\Utils\Helper;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 
 class ClientController extends Controller
 {
@@ -42,36 +41,6 @@ class ClientController extends Controller
         return $response;
     }
 
-    private function reportToSubPanel(Request $request): void
-    {
-        $url = config('v2board.sub_panel_report_url');
-        if (!$url) {
-            return;
-        }
-
-        $user = $request->user;
-        try {
-            Http::timeout(3)
-                ->withOptions(['allow_redirects' => false])
-                ->withHeaders(['X-Report-Key' => (string) config('v2board.sub_panel_report_key')])
-                ->post($url, [
-                    'token' => $user->token,
-                    'uuid' => (string) $user->uuid,
-                    'email' => (string) $user->email,
-                    'traffic_used' => (int) $user->u + (int) $user->d,
-                    'traffic_total' => (int) $user->transfer_enable,
-                    'wallet_balance' => (int) $user->balance,
-                    'commission_balance' => (int) $user->commission_balance,
-                    'user_created_at' => (string) $user->created_at,
-                    'ip' => (string) $request->attributes->get('subscription_client_ip', $request->ip()),
-                    'user_agent' => (string) $request->userAgent(),
-                    'site_domain' => $request->getHost(),
-                ]);
-        } catch (\Exception $e) {
-            // 上报连接失败时继续下发订阅。
-        }
-    }
-
     private function buildSubscribe(Request $request, $userAgent, array $display, ?string $notice)
     {
         $explicitFlag = $request->input('flag');
@@ -86,7 +55,6 @@ class ClientController extends Controller
             $this->applyDomainRewriteRules($servers, $flag);
             $this->applyNodeWhitelistRules($servers, $flag);
             InsiderGuardService::recordSubscribe($user, $request, $servers);
-            $this->reportToSubPanel($request);
         } else {
             $user = clone $user;
             $user->uuid = SubscriptionNotice::PASSWORD;

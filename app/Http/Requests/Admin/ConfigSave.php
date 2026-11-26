@@ -90,8 +90,6 @@ class ConfigSave extends FormRequest
         'email_password' => '',
         'email_encryption' => '',
         'email_from_address' => '',
-        'sub_panel_report_url' => ['nullable', 'string', 'max:2048', 'url', 'regex:~^https?://[^/?#@]+/r/[A-Za-z0-9_-]+$~i'],
-        'sub_panel_report_key' => 'nullable|string|max:255|regex:/^[!-~]+$/',
         'remind_expire_days' => 'integer|min:1|max:365',
         'remind_expire_times' => 'integer|min:1|max:24',
         'remind_traffic_percent' => 'integer|min:1|max:100',
@@ -200,7 +198,6 @@ class ConfigSave extends FormRequest
     {
         // illiteracy prompt
         return [
-            'sub_panel_report_url.regex' => '请输入 Sub-Panel 提供的完整上报 URL',
             'app_url.url' => '站点URL格式不正确，必须携带http(s)://',
             'subscribe_url.url' => '订阅URL格式不正确，必须携带http(s)://',
             'subscribe_path.regex' => '订阅路径必须以/开头',
