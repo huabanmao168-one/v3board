@@ -30,6 +30,8 @@ class SubscribeIngressServiceTest extends TestCase
             {
             }
         });
+        // GeoIpService resolves the XDB location through storage_path(); no database here.
+        $container->instance('path.storage', sys_get_temp_dir() . '/v3board-test-storage');
         Container::setInstance($container);
         Facade::clearResolvedInstance('log');
         Facade::setFacadeApplication($container);
