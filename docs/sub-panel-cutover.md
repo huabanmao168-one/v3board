@@ -58,8 +58,8 @@ V3Board 使用与 Sub-Panel 同系列的 ip2region XDB。将 IPv4 文件放到 s
 
 ## V3Board 后台
 
-1. 在「风控中心 → 风控设置」填入 V3Board 实际看到的 Nginx TCP 来源地址。启用后，订阅入口要求来源匹配且代理提供有效 IP。
+1. 在「风控中心 → 风控设置」填入 V3Board 实际看到的 Nginx TCP 来源地址。启用后，订阅入口要求来源匹配且代理提供有效 IP。留空时使用 Laravel 解析出的客户端 IP。若使用 Laravel 的 TrustProxies，请仅信任实际代理或 CDN 地址，并限制源站直连。
 2. 启用海外限制前，先核对 Nginx 的国家代码。默认只允许 CN，可另开港澳台。归属地未知的 IP 会被拒绝。按需填写可信 IP 和 UA 关键词，并在下拉框选择要拦截的 XDB 云厂商。
 3. 在 V3Board 后台按需新建订阅展示规则。由 V3Board 直接生成订阅的入口可以启用 Lumi。仍经过 Sub-Panel 加密的入口需要保持 V3Board 的 Lumi 关闭，或先关闭网关端 Lumi。
-4. 在测试入口验证旧链接、IPv4、IPv6、地区策略、客户端兼容和登录保护。拦截原因可在 V3Board 应用日志中查询。
+4. 在测试入口验证旧链接、IPv4、IPv6、地区策略、客户端兼容和登录保护。拦截原因可在「风控中心 → 订阅拦截」查询。
 5. 正式切换前备份原 Nginx 配置和 Sub-Panel 数据。验证稳定后停用 Sub-Panel。回滚时恢复原反代配置及原 Lumi 开关。

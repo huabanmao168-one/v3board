@@ -10,7 +10,7 @@
 |------|------|------|
 | 后端 | 本仓库（Laravel） | 接口、定时任务、Telegram 机器人、数据库脚本 |
 | 用户端前端 | 本仓库 `public/theme/default` | 与上游一致 |
-| 后台管理前端 | [codeman857/v2board-admin](https://github.com/codeman857/v2board-admin) | React 19 + antd 6，本仓库在 admin/ 维护源码，内置构建产物 `public/assets/admin`，由 `build-admin.sh` 生成，部署和升级都不需要 Node |
+| 后台管理前端 | 本仓库 `admin/` | React 19 + antd 6，本仓库在 admin/ 维护源码，内置构建产物 `public/assets/admin`，由 `build-admin.sh` 生成，部署和升级都不需要 Node |
 | 节点端 | [修改版 V2bX](https://github.com/wyx2685/V2bX)、[v2node](https://github.com/wyx2685/v2node) | 与上游相同 |
 
 ## 相对上游新增的功能
@@ -23,7 +23,8 @@
 - 风险用户：按时段统计订阅次数与来源 IP 数并评分，达到阈值标为高风险
 - 节点异常登记：查看异常前 24 小时内被下发过该节点的候选账号与时间线（按首次 / 最近下发时间估算，可能多列），只是线索，不能证明泄露
 - 节点 TCP 健康探测（可选）：每 5 分钟探测一次，连续两次不通时通过 Telegram 通知管理员（需开启机器人并绑定管理员，同一告警默认 2 小时内只发一次）
-- 人工审核与订阅限制：限制生效后，订阅和 App 配置仅下发提示节点，解除后恢复。用户可继续登录面板。
+- 人工审核与订阅限制：限制生效后，订阅和 App 配置按提示节点开关返回一条提示节点或空正文 HTTP 403。用户可继续登录面板。
+- 订阅入口防护：订阅和 App 配置共用可信代理、地区、浏览器、UA 与云厂商规则。可在「订阅拦截」按 IP 查记录，在「GeoIP 库」检查 IPv4/IPv6 XDB 或手动查 IP。详见 [订阅入口切换](docs/sub-panel-cutover.md)。
 - 审计数据保留 1～365 天（默认 3；每个活跃设备每天约 24 行、每行约 0.4 KB，万级用户不建议超过 7 天），每小时自动清理；数据含 IP 与 UA，请按当地法规设置保留期
 - 设置在「风控中心 → 风控设置」；定时任务已加入调度，不需要另加 crontab，排障时可手动执行 `php artisan insider-guard:health`、`php artisan insider-guard:cleanup`；缓存依赖 Redis；站点在反向代理 / CDN 后面且未配置信任代理时，拿到的来源 IP 是代理地址，IP 维度的评分无效
 
@@ -35,7 +36,7 @@
 - 无订阅用户也可以查看节点列表
 - mihomo 系订阅开启 `support-x25519mlkem768`；只按 `sing-box` 关键字识别 sing-box，避免 UA 里带 sing 的系统语言名被误判；Shadowrocket 订阅状态行正确处理永久有效用户
 
-订阅加密、域名重写、节点 UA 白名单在「系统配置 → 订阅」里设置，其余为固定行为。
+上述开关及展示、域名改写、节点 UA 白名单均在「系统配置 → 订阅」管理。
 
 ### 订单与订阅周期
 
@@ -129,7 +130,7 @@ cd v3board
 bash init.sh
 ```
 
-从兼容的 v2board Git 部署迁移，先备份数据库。更新脚本会执行数据库升级。
+从兼容的 v2board Git 部署迁移前，先备份数据库和站点配置。更新脚本直接拉取本仓库的 main 并要求快进合并。遇到分叉时，请在备份后使用新检出的 V3Board 目录部署。
 
 ```shell
 git remote set-url origin https://github.com/huabanmao168-one/v3board.git
