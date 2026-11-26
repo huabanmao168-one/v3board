@@ -478,6 +478,15 @@ export interface GuardOverview {
 /** 风险用户统计时段（小时） */
 export type GuardHours = 1 | 8 | 24 | 72 | 168
 
+/** 限制中的账号（insiderGuard/restrictedUsers），响应顶层另有 total */
+export interface GuardRestrictedUser {
+  user_id: number
+  email: string | null
+  admin_id: number | null
+  reason: string
+  created_at: number
+}
+
 /** 风险用户（insiderGuard/users），响应顶层另有 hours / threshold */
 export interface GuardRiskUser {
   user_id: number

@@ -105,6 +105,23 @@ class InsiderGuardController extends Controller
         ]);
     }
 
+    /** 限制中的账号：服务端分页，最近限制的在前，带邮箱、限制原因与操作管理员 */
+    public function restrictedUsers(Request $request)
+    {
+        $pageSize = max(10, min(100, (int)$request->input('pageSize', 20)));
+        $current = max(1, min(100000, (int)$request->input('current', 1)));
+        $total = DB::table('v2_insider_guard_restrict')->count();
+        $rows = DB::table('v2_insider_guard_restrict')
+            ->orderByDesc('created_at')
+            ->orderByDesc('user_id')
+            ->forPage($current, $pageSize)
+            ->get(['user_id', 'admin_id', 'reason', 'created_at']);
+        return response([
+            'data' => $this->withEmails($rows)->values(),
+            'total' => $total,
+        ]);
+    }
+
     /** 风险用户：按时段统计订阅次数、来源 IP 数并评分 */
     public function users(Request $request)
     {
