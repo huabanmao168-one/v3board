@@ -53,7 +53,9 @@ interface ReviewModalProps {
 
 export function ReviewModal({ user, onSaved, children }: ReviewModalProps) {
   const [visible, setVisible] = useState(false)
-  const [action, setAction] = useState<GuardReviewAction>('watch')
+  // 已限制的用户默认选择"解除限制"，未限制的默认选择"持续观察"
+  const defaultAction: GuardReviewAction = user.restricted ? 'release' : 'watch'
+  const [action, setAction] = useState<GuardReviewAction>(defaultAction)
   const [reason, setReason] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -61,7 +63,7 @@ export function ReviewModal({ user, onSaved, children }: ReviewModalProps) {
   const close = () => setVisible(false)
   /** 关闭动画结束后再重置，避免关闭过程中内容跳变 */
   const reset = () => {
-    setAction('watch')
+    setAction(defaultAction)
     setReason('')
     setConfirmed(false)
   }

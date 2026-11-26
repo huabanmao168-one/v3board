@@ -156,10 +156,10 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
               {data.restriction && (
                 <Note style={{ marginBottom: 12 }}>
                   <div>
-                    限制于 {guardTime(data.restriction.created_at)} · 管理员 #{data.restriction.admin_id ?? '-'}
+                    <strong>⚠️ 此用户的订阅已被限制</strong> · 限制于 {guardTime(data.restriction.created_at)} · 管理员 #{data.restriction.admin_id ?? '-'}
                   </div>
-                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>原因：{data.restriction.reason}</div>
-                  <div>订阅与客户端配置请求已被限制</div>
+                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: 4 }}>原因：{data.restriction.reason}</div>
+                  <div style={{ marginTop: 8, color: '#666' }}>订阅与客户端配置请求已被限制，仅下发提示节点。如需解除，点击右上角「审核此用户」→ 选择「解除限制」</div>
                 </Note>
               )}
               <div className="d-flex flex-wrap" style={{ marginBottom: 16 }}>

@@ -46,6 +46,20 @@ export function GeoIpPanel() {
   return (
     <Section>
       <h4>GeoIP 数据库</h4>
+      <div style={{ background: '#f5f5f5', padding: '12px 16px', borderRadius: 4, marginBottom: 16, fontSize: 13, lineHeight: 1.6 }}>
+        <strong>📁 数据库文件位置：</strong>
+        <div style={{ marginTop: 4 }}>
+          • IPv4：<code>storage/app/geoip/ip2region_v4.xdb</code>
+        </div>
+        <div>
+          • IPv6：<code>storage/app/geoip/ip2region_v6.xdb</code>
+        </div>
+        <div style={{ marginTop: 8, color: '#666' }}>
+          请将 ip2region XDB 文件放到上述路径（相对于站点根目录），并确保 PHP 进程可读。
+          <br />
+          优先使用带区县和 IP 用途的满载版，精简版只提供文件内已有的字段。
+        </div>
+      </div>
       {status.data ? <p>IPv4 {statusLabel[status.data.ipv4]} · IPv6 {statusLabel[status.data.ipv6]}</p> : <p>{status.isError ? '读取数据库状态失败' : '正在读取数据库状态'}</p>}
       <div className="d-flex" style={{ gap: 8, maxWidth: 420 }}>
         <Input aria-label="IP 地址" placeholder="输入 IPv4 或 IPv6 地址" value={input} onChange={(event) => setInput(event.target.value)} onPressEnter={submit} />

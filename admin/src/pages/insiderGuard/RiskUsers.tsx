@@ -68,7 +68,7 @@ export function RiskUsers({ hours, onHoursChange, onDetail, onReviewed }: RiskUs
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 180,
       render: (_: unknown, row) => (
         <div className="d-flex" style={{ gap: 8 }}>
           <Button size="small" onClick={() => onDetail(row.user_id)}>
@@ -83,7 +83,9 @@ export function RiskUsers({ hours, onHoursChange, onDetail, onReviewed }: RiskUs
             }}
             onSaved={onReviewed}
           >
-            <Button size="small">审核</Button>
+            <Button size="small" type={row.restricted ? 'primary' : 'default'} danger={row.restricted}>
+              {row.restricted ? '解除限制' : '审核'}
+            </Button>
           </ReviewModal>
         </div>
       ),
