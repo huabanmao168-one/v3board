@@ -19,7 +19,7 @@ const CLOUD_LABELS: Record<string, string> = {
 }
 
 const ingressLists = [
-  ['client_ip_header', '访客 IP 请求头', '站点在 CDN 后面时，填 CDN 回源带来的访客 IP 请求头名称，登录、订阅、工单等记录才不会显示 CDN 节点地址。常见：Cloudflare 填 CF-Connecting-IP，阿里云 CDN 填 Ali-Cdn-Real-Ip，其他多为 X-Real-IP 或 X-Forwarded-For（取第一个地址）。留空不处理；源站应只允许 CDN 回源，否则直连可伪造。'],
+  ['client_ip_header', '访客 IP 请求头', '站点在 CDN 后面时，填 CDN 回源带来的访客 IP 请求头名称，登录、订阅、工单等记录才不会显示 CDN 节点地址。常见：Cloudflare 填 CF-Connecting-IP，阿里云 CDN 填 Ali-Cdn-Real-Ip，其他多为 X-Real-IP 或 X-Forwarded-For（取第一个地址）。可填多个，用逗号或换行分隔，按顺序取第一个带有效 IP 的。留空不处理；源站应只允许 CDN 回源，否则直连可伪造。'],
   ['subscribe_ingress_proxies', '订阅入口可信代理', '填写 Nginx 来源 IP 或网段，每行一个。配置后仅接受这些代理。'],
   ['subscribe_ingress_allow_ips', '订阅入口 IP 例外', '填写允许跳过入口拦截的 IP 或网段，每行一个。'],
   ['subscribe_ingress_block_ua', '禁止的 UA 关键词', '每行一个关键词，忽略大小写。'],

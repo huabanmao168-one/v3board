@@ -66,7 +66,7 @@ class ConfigSave extends FormRequest
         'subscribe_ingress_block_browser' => 'in:0,1',
         'subscribe_ingress_trust_header' => 'in:0,1',
         'trust_cf_connecting_ip' => 'in:0,1',
-        'client_ip_header' => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9-]*$/D'],
+        'client_ip_header' => ['nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9,\s-]*$/D'],
         'subscribe_display_rules' => 'nullable|string|max:65535|json',
         'subscribe_notice_enable' => 'in:0,1',
         'subscribe_lumi_enable' => 'in:0,1',

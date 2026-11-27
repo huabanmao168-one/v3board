@@ -53,6 +53,12 @@ class CloudflareRealIpTest extends TestCase
         $this->assertSame('203.0.113.9', $this->ip(['REMOTE_ADDR' => '10.0.0.1', 'HTTP_ALI_CDN_REAL_IP' => '203.0.113.9', 'HTTP_CF_CONNECTING_IP' => '198.51.100.1']));
     }
 
+    public function testFirstPresentHeaderOfSeveralWins(): void
+    {
+        config(['v2board.client_ip_header' => "CF-Connecting-IP, X-Real-IP\nX-Forwarded-For"]);
+        $this->assertSame('203.0.113.9', $this->ip(['REMOTE_ADDR' => '10.0.0.1', 'HTTP_X_REAL_IP' => '203.0.113.9', 'HTTP_X_FORWARDED_FOR' => '198.51.100.1']));
+    }
+
     public function testForwardedListAndPortAreParsed(): void
     {
         $this->assertSame('203.0.113.9', CloudflareRealIp::parse('203.0.113.9, 10.0.0.1'));

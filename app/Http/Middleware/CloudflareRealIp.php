@@ -20,10 +20,13 @@ class CloudflareRealIp
         if ($name === '' && (int) config('v2board.trust_cf_connecting_ip', 0) === 1) {
             $name = 'CF-Connecting-IP';
         }
-        if ($name !== '' && preg_match('/^[A-Za-z0-9-]{1,64}$/D', $name)) {
-            $ip = self::parse((string) $request->headers->get($name));
+        // 可填多个，逗号、空格或换行分隔，按顺序取第一个带合法 IP 的
+        foreach (preg_split('/[\s,]+/', $name, -1, PREG_SPLIT_NO_EMPTY) as $candidate) {
+            if (!preg_match('/^[A-Za-z0-9-]{1,64}$/D', $candidate)) continue;
+            $ip = self::parse((string) $request->headers->get($candidate));
             if ($ip !== '') {
                 $request->server->set('REMOTE_ADDR', $ip);
+                break;
             }
         }
         return $next($request);
