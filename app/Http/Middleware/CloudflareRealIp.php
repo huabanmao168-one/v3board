@@ -13,6 +13,8 @@ class CloudflareRealIp
 {
     public function handle($request, Closure $next)
     {
+        // 保留改写前的来源地址，供后台「检测请求头」显示
+        $request->attributes->set('original_remote_addr', (string) $request->server->get('REMOTE_ADDR'));
         $name = trim((string) config('v2board.client_ip_header', ''));
         // 旧开关：等同于填写 CF-Connecting-IP
         if ($name === '' && (int) config('v2board.trust_cf_connecting_ip', 0) === 1) {

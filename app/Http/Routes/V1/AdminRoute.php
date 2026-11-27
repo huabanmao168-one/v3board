@@ -193,6 +193,7 @@ class AdminRoute
             $router->post('/insiderGuard/whitelistAdd', 'V1\\Admin\\InsiderGuardManageController@whitelistAdd');
             $router->post('/insiderGuard/whitelistRemove', 'V1\\Admin\\InsiderGuardManageController@whitelistRemove');
             $router->post('/insiderGuard/resetSubscription', 'V1\\Admin\\InsiderGuardManageController@resetSubscription');
+            $router->get ('/insiderGuard/clientIpProbe', 'V1\\Admin\\InsiderGuardManageController@clientIpProbe');
             $router->get ('/insiderGuard/devices', 'V1\\Admin\\InsiderGuardManageController@devices');
         });
     }

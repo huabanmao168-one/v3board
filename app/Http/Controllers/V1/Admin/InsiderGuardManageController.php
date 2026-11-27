@@ -111,6 +111,28 @@ class InsiderGuardManageController extends Controller
         return response(['data' => $data]);
     }
 
+    /** 检测当前这次后台请求带了哪些常见的访客 IP 请求头，帮助填写「访客 IP 请求头」 */
+    public function clientIpProbe(Request $request)
+    {
+        $names = ['CF-Connecting-IP', 'True-Client-IP', 'EO-Connecting-IP', 'Ali-Cdn-Real-Ip', 'Cdn-Src-Ip', 'Fastly-Client-IP',
+            'X-Real-IP', 'X-Client-IP', 'X-Original-Forwarded-For', 'X-Forwarded-For'];
+        $headers = [];
+        foreach ($names as $name) {
+            $value = (string) $request->headers->get($name);
+            if ($value === '') continue;
+            $headers[] = [
+                'name' => $name,
+                'value' => mb_substr(mb_convert_encoding($value, 'UTF-8', 'UTF-8'), 0, 200),
+                'ip' => \App\Http\Middleware\CloudflareRealIp::parse($value),
+            ];
+        }
+        return response(['data' => [
+            'peer' => (string) $request->attributes->get('original_remote_addr', $request->server('REMOTE_ADDR')),
+            'current' => (string) $request->ip(),
+            'headers' => $headers,
+        ]]);
+    }
+
     private function userId(Request $request): int
     {
         $value = $request->input('id');

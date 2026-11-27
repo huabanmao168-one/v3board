@@ -2,7 +2,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Input, InputNumber, Select, Switch } from 'antd'
 import { useState, type ReactNode } from 'react'
-import { unwrap } from '@/api/request'
+import { get, unwrap } from '@/api/request'
+import { adminPath } from '@/app/settings'
 import { fetchConfig, saveConfig } from '@/api/services/config'
 import { message } from '@/app/staticApi'
 import { Loading } from '@/components/Loading'
@@ -90,6 +91,52 @@ function normalize(raw: Record<string, unknown> | undefined): GuardConfig {
     insider_guard_auto_restrict: int('insider_guard_auto_restrict'),
     insider_guard_auto_periods: int('insider_guard_auto_periods'),
   }
+}
+
+interface IpProbe {
+  peer: string
+  current: string
+  headers: Array<{ name: string; value: string; ip: string }>
+}
+
+/** 检测当前这次后台请求带了哪些访客 IP 请求头，点「使用」填进「访客 IP 请求头」 */
+function ClientIpProbe({ onPick }: { onPick: (name: string) => void }) {
+  const probe = useQuery({
+    queryKey: ['insiderGuard', 'clientIpProbe'],
+    queryFn: () => unwrap(get<IpProbe>(adminPath('/insiderGuard/clientIpProbe'))),
+    enabled: false,
+    retry: false,
+  })
+  const data = probe.data
+  return (
+    <div style={{ padding: '12px 0', borderBottom: '1px solid var(--v2b-line-soft, #eee)' }}>
+      <Button size="small" loading={probe.isFetching} onClick={() => void probe.refetch()}>
+        检测我这次请求带的访客 IP 请求头
+      </Button>
+      {probe.isError && <Note style={{ marginTop: 8 }}>检测失败，请确认面板已更新到最新版本</Note>}
+      {data && (
+        <div style={{ marginTop: 8 }}>
+          <Note>
+            源站看到的来源地址：{data.peer || '-'}；面板当前采用的访客 IP：{data.current || '-'}。
+            下面哪一行的 IP 是你自己的出口 IP，就用哪一行。
+          </Note>
+          {data.headers.length === 0 ? (
+            <Note style={{ marginTop: 6 }}>没有检测到常见的访客 IP 请求头，需要在 CDN 里开启回源携带客户端 IP。</Note>
+          ) : (
+            data.headers.map((h) => (
+              <div key={h.name} className="d-flex align-items-center flex-wrap" style={{ gap: 8, marginTop: 6 }}>
+                <code>{h.name}</code>
+                <span style={MUTED}>{h.value}</span>
+                <Button size="small" disabled={!h.ip} onClick={() => onPick(h.name)}>
+                  使用
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** 输入框后面的单位 */
@@ -194,6 +241,7 @@ function SettingsForm({ initial, raw }: { initial: GuardConfig; raw?: Record<str
           <Input.TextArea aria-label={title} rows={2} value={form[key]} onChange={(event) => set(key, event.target.value)} />
         </Row>
       ))}
+      <ClientIpProbe onPick={(name) => set('client_ip_header', name)} />
       <Row title="禁止的云厂商" description={raw?.cloud_legacy_cidrs_active ? '保存后改用 XDB 厂商名单，原手填网段停止生效。' : '根据本地 XDB 识别厂商。留空表示关闭此项拦截。'}>
         <Select
           mode="multiple"
