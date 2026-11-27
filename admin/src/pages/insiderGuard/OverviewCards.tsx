@@ -1,4 +1,4 @@
-// 风控中心「概览」标签页顶部的统计卡片：近 24 小时事件、人工审核总数、限制中账号、节点异常事件、所选时段内的高风险账号
+// 风控中心「概览」标签页顶部的统计卡片：近 24 小时事件、人工审核总数、限制中账号、所选时段内的高风险账号
 import type { ReactNode } from 'react'
 import type { GuardOverview } from '@/api/types'
 import { Loading } from '@/components/Loading'
