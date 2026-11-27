@@ -66,6 +66,9 @@ export const guardTime = (seconds: number | null | undefined) =>
 export const userLabel = (email: string | null | undefined, userId: number | null | undefined) =>
   email || (userId ? `#${userId}` : '-')
 
+/** 单元格内容不换行（IP、归属地等），表格靠横向滚动容纳 */
+export const NOWRAP: CSSProperties = { whiteSpace: 'nowrap' }
+
 export const MUTED: CSSProperties = { fontSize: 12, color: 'var(--v2b-text-muted, #666)' }
 
 /** 分区下方 / 控件旁的灰色小字说明 */
@@ -139,16 +142,16 @@ export function eventColumns({
       dataIndex: 'ip_address',
       key: 'ip_address',
       width: 150,
-      render: (ip: string, row) => (isMergedBucket(row) ? '已合并' : ip || '-'),
+      render: (ip: string, row) => <span style={NOWRAP}>{isMergedBucket(row) ? '已合并' : ip || '-'}</span>,
     },
     {
       title: 'IP 归属地',
       key: 'ip_location',
-      width: 165,
+      width: 240,
       render: (_: unknown, row: GuardEvent) => isMergedBucket(row) ? '-' : (
         <>
-          <div>{row.ip_location || '未知'}</div>
-          {(row.ip_isp || row.ip_usage) && <small style={MUTED}>{[row.ip_isp, row.ip_usage].filter(Boolean).join(' · ')}</small>}
+          <div style={NOWRAP}>{row.ip_location || '未知'}</div>
+          {(row.ip_isp || row.ip_usage) && <small style={{ ...MUTED, ...NOWRAP }}>{[row.ip_isp, row.ip_usage].filter(Boolean).join(' · ')}</small>}
         </>
       ),
     },

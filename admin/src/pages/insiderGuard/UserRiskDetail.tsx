@@ -187,7 +187,7 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
               </div>
               <DeviceList id={data.user_id} />
               <div style={{ fontWeight: 'bold', marginBottom: 6 }}>最近事件</div>
-              <SubTable<GuardEvent> dataSource={data.events} columns={eventTableColumns} scroll={{ x: 830 }} />
+              <SubTable<GuardEvent> dataSource={data.events} columns={eventTableColumns} scroll={{ x: 1010 }} />
               <div style={{ fontWeight: 'bold', marginBottom: 6 }}>被下发过的节点</div>
               <SubTable<Delivery>
                 rowKey={(row) => `${row.node_type}:${row.node_id}`}

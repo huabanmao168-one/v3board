@@ -101,7 +101,7 @@ export function RecentEvents() {
           dataSource={query.data?.rows ?? []}
           columns={columns}
           pagination={pagination}
-          scroll={{ x: 970 }}
+          scroll={{ x: 1150 }}
           onChange={(next) => setPage({ current: next.current ?? 1, pageSize: next.pageSize ?? page.pageSize })}
         />
       )}

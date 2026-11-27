@@ -123,15 +123,24 @@ function ClientIpProbe({ onPick }: { onPick: (name: string) => void }) {
           {data.headers.length === 0 ? (
             <Note style={{ marginTop: 6 }}>没有检测到常见的访客 IP 请求头，需要在 CDN 里开启回源携带客户端 IP。</Note>
           ) : (
-            data.headers.map((h) => (
-              <div key={h.name} className="d-flex align-items-center flex-wrap" style={{ gap: 8, marginTop: 6 }}>
-                <code>{h.name}</code>
-                <span style={MUTED}>{h.value}</span>
-                <Button size="small" disabled={!h.ip} onClick={() => onPick(h.name)}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'max-content max-content max-content',
+                alignItems: 'center',
+                gap: '6px 16px',
+                marginTop: 8,
+                overflowX: 'auto',
+              }}
+            >
+              {data.headers.map((h) => [
+                <span key={h.name + ':n'} style={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{h.name}</span>,
+                <span key={h.name + ':v'} style={{ whiteSpace: 'nowrap' }}>{h.value}</span>,
+                <Button key={h.name + ':b'} size="small" disabled={!h.ip} onClick={() => onPick(h.name)}>
                   使用
-                </Button>
-              </div>
-            ))
+                </Button>,
+              ])}
+            </div>
           )}
         </div>
       )}
