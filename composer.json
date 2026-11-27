@@ -57,7 +57,10 @@
             "App\\": "app/",
             "Library\\": "library/",
             "Database\\Seeders\\": "database/seeders/"
-        }
+        },
+        "classmap": [
+            "library/ip2region/"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
