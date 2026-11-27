@@ -21,7 +21,14 @@ class SubscribeIngressService
         // activity log records. It is only as trustworthy as TrustProxies::$proxies: a wildcard
         // there lets a direct client pick its own address via X-Forwarded-For.
         $ip = $proxies ? (string) $request->header('X-Subscription-Client-IP') : (string) $request->ip();
-        if ($proxies && (!$trusted || !filter_var($ip, FILTER_VALIDATE_IP))) {
+        if (self::trustsHeader()) {
+            // Header-trust mode: the relay's header is taken at face value whatever the TCP peer is
+            // (the peer is a CDN edge when the relay goes through one). Anyone who can reach this
+            // endpoint can forge it; requests without a valid header use the resolved address.
+            $header = self::headerIp($request);
+            $trusted = $header !== '';
+            $ip = $trusted ? $header : (string) $request->ip();
+        } elseif ($proxies && (!$trusted || !filter_var($ip, FILTER_VALIDATE_IP))) {
             self::deny($request, $peer, 'untrusted_ingress', 404);
         }
         $request->attributes->set('subscription_client_ip', $ip);
@@ -62,7 +69,14 @@ class SubscribeIngressService
 
     public static function ipLocation(Request $request, string $ip): ?string
     {
-        if ($ip === '' || $ip !== $request->header('X-Subscription-Client-IP')
+        if ($ip === '') {
+            return null;
+        }
+        if (self::trustsHeader()) {
+            if ($ip !== self::headerIp($request)) {
+                return null;
+            }
+        } elseif ($ip !== $request->header('X-Subscription-Client-IP')
             || !IpUtils::checkIp((string) $request->server('REMOTE_ADDR'), self::entries(config('v2board.subscribe_ingress_proxies')))) {
             return null;
         }
@@ -78,6 +92,23 @@ class SubscribeIngressService
             }
         }
         return implode(' · ', array_unique($parts));
+    }
+
+    public static function trustsHeader(): bool
+    {
+        return (int) config('v2board.subscribe_ingress_trust_header', 0) === 1;
+    }
+
+    /** Client IP from the relay headers (the Sub-Panel header name is accepted too); '' when absent or invalid. */
+    private static function headerIp(Request $request): string
+    {
+        foreach (['X-Subscription-Client-IP', 'X-Sub-Panel-Client-IP'] as $name) {
+            $value = trim((string) $request->header($name));
+            if ($value !== '' && filter_var($value, FILTER_VALIDATE_IP)) {
+                return $value;
+            }
+        }
+        return '';
     }
 
     public static function entries($value): array

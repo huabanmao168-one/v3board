@@ -71,6 +71,33 @@ class SubscribeIngressServiceTest extends TestCase
         $this->assertSame('2001:db8::4', $request->attributes->get('subscription_client_ip'));
     }
 
+    public function testHeaderTrustAcceptsTheRelayHeaderFromAnyPeer(): void
+    {
+        config(['v2board.subscribe_ingress_trust_header' => 1]);
+        $request = $this->request('192.0.2.100', 'CN');
+        SubscribeIngressService::enforce($request);
+        $this->assertSame('2001:db8::4', $request->attributes->get('subscription_client_ip'));
+    }
+
+    public function testHeaderTrustFallsBackToTheResolvedAddressWithoutAHeader(): void
+    {
+        config(['v2board.subscribe_ingress_trust_header' => 1, 'v2board.subscribe_ingress_block_oversea' => 0]);
+        $request = Request::create('/subscribe', 'GET', [], [], [], ['REMOTE_ADDR' => '192.0.2.100']);
+        SubscribeIngressService::enforce($request);
+        $this->assertSame('192.0.2.100', $request->attributes->get('subscription_client_ip'));
+    }
+
+    public function testHeaderTrustReadsTheSubPanelHeaderName(): void
+    {
+        config(['v2board.subscribe_ingress_trust_header' => 1, 'v2board.subscribe_ingress_block_oversea' => 0]);
+        $request = Request::create('/subscribe', 'GET', [], [], [], [
+            'REMOTE_ADDR' => '192.0.2.100',
+            'HTTP_X_SUB_PANEL_CLIENT_IP' => '198.51.100.7',
+        ]);
+        SubscribeIngressService::enforce($request);
+        $this->assertSame('198.51.100.7', $request->attributes->get('subscription_client_ip'));
+    }
+
     private function request(string $peer, string $country): Request
     {
         return Request::create('/subscribe', 'GET', [], [], [], [

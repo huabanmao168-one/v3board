@@ -198,6 +198,7 @@ class ConfigController extends Controller
                 'subscribe_ingress_block_oversea' => config('v2board.subscribe_ingress_block_oversea'),
                 'subscribe_ingress_allow_hk_mo_tw' => config('v2board.subscribe_ingress_allow_hk_mo_tw'),
                 'subscribe_ingress_block_browser' => config('v2board.subscribe_ingress_block_browser'),
+                'subscribe_ingress_trust_header' => (int) config('v2board.subscribe_ingress_trust_header', 0),
                 'insider_guard_risk_threshold' => (int) config('v2board.insider_guard_risk_threshold', 50),
                 'insider_guard_retention_days' => (int) config('v2board.insider_guard_retention_days', 3),
                 'insider_guard_auto_notify' => (int) config('v2board.insider_guard_auto_notify', 0),
@@ -337,8 +338,9 @@ class ConfigController extends Controller
         $data = $request->validated();
         $ingress = array_replace(config('v2board', []), $data);
         if (!empty($ingress['subscribe_ingress_block_oversea'])
+            && empty($ingress['subscribe_ingress_trust_header'])
             && !SubscribeIngressService::entries($ingress['subscribe_ingress_proxies'] ?? null)) {
-            abort(422, '开启海外订阅限制前，请先填写订阅入口可信代理');
+            abort(422, '开启海外订阅限制前，请先填写订阅入口可信代理，或开启信任入口请求头');
         }
 
         // 签到联动：关闭普通签到时自动关闭运气签到

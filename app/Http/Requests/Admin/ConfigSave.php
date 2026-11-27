@@ -64,6 +64,7 @@ class ConfigSave extends FormRequest
         'subscribe_ingress_block_oversea' => 'in:0,1',
         'subscribe_ingress_allow_hk_mo_tw' => 'in:0,1',
         'subscribe_ingress_block_browser' => 'in:0,1',
+        'subscribe_ingress_trust_header' => 'in:0,1',
         'subscribe_display_rules' => 'nullable|string|max:65535|json',
         'subscribe_notice_enable' => 'in:0,1',
         'subscribe_lumi_enable' => 'in:0,1',

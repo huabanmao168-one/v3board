@@ -24,6 +24,7 @@ const ingressLists = [
 ] as const
 
 const ingressSwitches = [
+  ['subscribe_ingress_trust_header', '信任入口请求头', '直接采用 X-Subscription-Client-IP（或 X-Sub-Panel-Client-IP）里的 IP，不校验来源地址，适合中转经过 CDN 回源的情况。开启后「可信代理」不再生效；知道请求头名称的人可以伪造 IP。'],
   ['subscribe_ingress_block_oversea', '禁止海外 IP 拉取', '使用可信代理提供的地区代码。缺少地区信息时拒绝。'],
   ['subscribe_ingress_allow_hk_mo_tw', '允许港澳台 IP', '开启海外限制时，同时允许 HK、MO、TW。'],
   ['subscribe_ingress_block_browser', '禁止浏览器直访', '拦截请求 HTML 的浏览器，常见订阅客户端除外。'],
@@ -56,6 +57,7 @@ const DEFAULTS: GuardConfig = {
   subscribe_ingress_block_oversea: 0,
   subscribe_ingress_allow_hk_mo_tw: 0,
   subscribe_ingress_block_browser: 0,
+  subscribe_ingress_trust_header: 0,
   insider_guard_risk_threshold: 50,
   insider_guard_retention_days: 3,
   insider_guard_auto_notify: 0,
@@ -78,6 +80,7 @@ function normalize(raw: Record<string, unknown> | undefined): GuardConfig {
     subscribe_ingress_block_oversea: int('subscribe_ingress_block_oversea'),
     subscribe_ingress_allow_hk_mo_tw: int('subscribe_ingress_allow_hk_mo_tw'),
     subscribe_ingress_block_browser: int('subscribe_ingress_block_browser'),
+    subscribe_ingress_trust_header: int('subscribe_ingress_trust_header'),
     insider_guard_risk_threshold: int('insider_guard_risk_threshold'),
     insider_guard_retention_days: int('insider_guard_retention_days'),
     insider_guard_auto_notify: int('insider_guard_auto_notify'),
