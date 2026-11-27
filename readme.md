@@ -129,6 +129,45 @@ cd v3board
 bash init.sh
 ```
 
+从其他版本迁移（wyx2685/v2board 或其他 fork）：
+
+**步骤 1：备份**
+```shell
+# 备份数据库
+mysqldump -u 用户名 -p 数据库名 > backup_$(date +%Y%m%d).sql
+
+# 备份 .env 配置文件
+cp .env .env.backup
+```
+
+**步骤 2：切换仓库地址**
+```shell
+# 查看当前远程仓库
+git remote -v
+
+# 切换到 V3Board 仓库（将 origin 指向新仓库）
+git remote set-url origin https://github.com/huabanmao168-one/v3board.git
+
+# 或者添加为新的远程仓库（保留原仓库）
+git remote add v3board https://github.com/huabanmao168-one/v3board.git
+
+# 拉取 V3Board 的分支
+git fetch origin main
+# 或者（如果添加为新远程仓库）
+git fetch v3board main
+```
+
+**步骤 3：切换到 V3Board**
+```shell
+# 方式 1：强制切换（会丢弃本地修改和提交）
+git reset --hard origin/main
+# 或者（如果添加为新远程仓库）
+git reset --hard v3board/main
+
+# 方式 2：使用更新脚本（需要快进合并或强制更新）
+./update.sh || V3BOARD_UPDATE_FORCE=1 ./update.sh
+```
+
 从兼容的 v2board Git 部署迁移前，先备份数据库和站点配置。更新脚本直接拉取本仓库的 main（不看 `origin`）并要求快进合并。遇到分叉时，推荐在备份后使用新检出的 V3Board 目录部署；也可以在确认可丢弃本地提交和对已跟踪文件的修改后，用 `V3BOARD_UPDATE_FORCE=1` 让脚本强制切换到拉取的版本：
 
 ```shell
