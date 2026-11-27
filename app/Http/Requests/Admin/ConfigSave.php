@@ -127,6 +127,9 @@ class ConfigSave extends FormRequest
         // insider guard（风控中心）
         'insider_guard_risk_threshold' => 'integer|min:0|max:100',
         'insider_guard_retention_days' => 'integer|min:1|max:365',
+        'insider_guard_auto_notify' => 'in:0,1',
+        'insider_guard_auto_restrict' => 'in:0,1',
+        'insider_guard_auto_periods' => 'integer|min:1|max:20',
     ];
     /**
      * Get the validation rules that apply to the request.

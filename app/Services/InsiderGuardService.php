@@ -90,7 +90,7 @@ class InsiderGuardService
         self::deliveries((int)$user->id, $servers);
     }
 
-    /** 用户是否被限制；缓存或查询失败按未限制处理，不影响订阅 */
+    /** 用户是否被限制；缓存失败时降级查数据库，数据库也失败时按未限制处理（优先可用性） */
     public static function isRestricted(int $userId): bool
     {
         try {
@@ -100,7 +100,13 @@ class InsiderGuardService
             return is_array($ids) && in_array($userId, $ids, true);
         } catch (\Throwable $e) {
             self::logWriteError('InsiderGuard restrict lookup unavailable', $e);
-            return false;
+            // 缓存失败时降级直接查数据库
+            try {
+                return DB::table('v2_insider_guard_restrict')->where('user_id', $userId)->exists();
+            } catch (\Throwable $dbError) {
+                // 数据库也失败时返回 false，优先保证订阅可用性；如需优先安全性可改为 true
+                return false;
+            }
         }
     }
 
@@ -271,7 +277,7 @@ class InsiderGuardService
             'score' => $score,
             'subscription_requests_1h' => $pulls,
             'distinct_ips_1h' => $ips,
-            'manual_review_required' => $score >= $threshold,
+            'manual_review_required' => $score >= $threshold && !self::isWhitelisted($userId),
         ];
     }
 
@@ -279,6 +285,86 @@ class InsiderGuardService
     {
         return min(100, ($pulls > self::SCORE_PULLS_THRESHOLD ? self::SCORE_POINTS : 0)
             + ($ips > self::SCORE_IPS_THRESHOLD ? self::SCORE_POINTS : 0));
+    }
+
+    /** 用户是否在白名单：白名单用户不算高风险，也不参与自动处置；查询失败按不在白名单处理 */
+    public static function isWhitelisted(int $userId): bool
+    {
+        try {
+            return DB::table('v2_insider_guard_whitelist')->where('user_id', $userId)->exists();
+        } catch (\Throwable $e) {
+            self::logWriteError('InsiderGuard whitelist lookup unavailable', $e);
+            return false;
+        }
+    }
+
+    /**
+     * 自动处置（定时任务每 5 分钟调用）：最近 1 小时评分达到阈值、连续 N 个周期都命中的账号，
+     * 开启「通知」时发 Telegram（同一账号 2 小时内一次），开启「自动限制」时直接限制并留审核记录。白名单与已限制账号跳过
+     */
+    public static function autoHandle(): array
+    {
+        $notify = (int)self::setting('auto_notify', 0) === 1;
+        $restrict = (int)self::setting('auto_restrict', 0) === 1;
+        if (!$notify && !$restrict) return ['disabled' => true];
+        $threshold = (int)self::setting('risk_threshold', self::DEFAULT_RISK_THRESHOLD);
+        $periods = max(1, min(20, (int)self::setting('auto_periods', 3)));
+        $skip = DB::table('v2_insider_guard_whitelist')->pluck('user_id')->merge(
+            DB::table('v2_insider_guard_restrict')->pluck('user_id')
+        )->flip()->all();
+        $rows = DB::table('v2_insider_guard_activity')
+            ->select('user_id')
+            ->selectRaw('SUM(CASE WHEN event_type = ? THEN times ELSE 0 END) as pulls', [self::EVENT_SUBSCRIPTION])
+            ->selectRaw("COUNT(DISTINCT NULLIF(ip_address, '')) as ips")
+            ->where('last_at', '>=', time() - self::SCORE_WINDOW_SECONDS)
+            ->groupBy('user_id')
+            ->orderByDesc('pulls')
+            ->limit(2000)
+            ->get();
+        $prev = Cache::get('insider_guard_auto_hits', []);
+        $prev = is_array($prev) ? $prev : [];
+        $next = [];
+        $notified = 0;
+        $restricted = 0;
+        foreach ($rows as $r) {
+            $id = (int)$r->user_id;
+            if (isset($skip[$id])) continue;
+            $score = self::calcScore((int)$r->pulls, (int)$r->ips);
+            if ($score < $threshold) continue;
+            $next[$id] = ($prev[$id] ?? 0) + 1;
+            if ($next[$id] < $periods) continue;
+            $email = User::where('id', $id)->value('email');
+            if ($email === null) continue;
+            $didRestrict = false;
+            if ($restrict) {
+                $reason = "自动处置：连续 {$periods} 个检测周期评分达到 {$score}（1 小时内订阅 {$r->pulls} 次，来源 IP {$r->ips} 个）";
+                DB::transaction(function () use ($id, $reason) {
+                    self::restrict($id, 0, $reason);
+                    DB::table('v2_insider_guard_review')->insert([
+                        'user_id' => $id, 'admin_id' => 0, 'action' => 'restrict', 'reason' => $reason, 'created_at' => time(),
+                    ]);
+                });
+                self::refreshRestricted();
+                $didRestrict = true;
+                $restricted++;
+            }
+            if ($notify || $didRestrict) {
+                try {
+                    if (Cache::add('insider_guard_auto_notify:' . $id, 1, 7200)) {
+                        $text = "风控提醒：账号 `{$email}` (#{$id}) 连续 {$periods} 个周期风险评分 {$score}，1 小时内订阅 {$r->pulls} 次、来源 IP {$r->ips} 个"
+                            . ($didRestrict ? '，已自动限制订阅。' : '。请到风控中心核查。');
+                        (new TelegramService())->sendMessageWithAdmin($text);
+                        $notified++;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('InsiderGuard auto notify failed', ['error' => $e->getMessage()]);
+                }
+            }
+            // 已处置的账号不再累计，避免之后每个周期都重复触发
+            unset($next[$id]);
+        }
+        Cache::put('insider_guard_auto_hits', $next, 3600);
+        return ['hit' => count($next) + $notified + $restricted, 'notified' => $notified, 'restricted' => $restricted];
     }
 
     /** 全部节点的 "type:id" => 名称 映射；只查 id、name，不走 ServerService 的流量 / 状态合并 */
@@ -293,7 +379,7 @@ class InsiderGuardService
         return $names;
     }
 
-    /** 清理过期的活动 / 节点下发 / UA 字典记录（保留 1～365 天）与已删除用户的限制记录，由定时任务每小时调用 */
+    /** 清理过期的活动 / 节点下发 / UA 字典记录（保留 1～365 天）与已删除用户的限制/白名单记录，由定时任务每小时调用 */
     public static function cleanup(): array
     {
         $days = max(1, min(365, (int)self::setting('retention_days', self::DEFAULT_RETENTION_DAYS)));
@@ -306,10 +392,12 @@ class InsiderGuardService
             'v2_insider_guard_ua' => ['last_seen', $cutoff - self::UA_SEEN_SECONDS, 'ua_hash'],
         ];
         $counts = [];
-        // 用户删除时限制表没有联动，顺带清掉已不存在用户的限制记录
+        // 用户删除时限制表和白名单表没有联动，顺带清掉已不存在用户的记录
         $counts['v2_insider_guard_restrict'] = DB::table('v2_insider_guard_restrict')
             ->whereNotIn('user_id', User::query()->select('id'))->delete();
         if ($counts['v2_insider_guard_restrict'] > 0) self::forgetQuietly(self::RESTRICT_CACHE_KEY);
+        $counts['v2_insider_guard_whitelist'] = DB::table('v2_insider_guard_whitelist')
+            ->whereNotIn('user_id', User::query()->select('id'))->delete();
         foreach ($targets as $table => [$column, $before, $orderBy]) {
             // 分批删，避免一条大 DELETE 长时间持锁；带 ORDER BY 让语句级 binlog 不报 unsafe
             $counts[$table] = 0;

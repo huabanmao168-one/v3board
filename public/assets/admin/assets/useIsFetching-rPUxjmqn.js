@@ -1,1 +1,0 @@
-import{r as e}from"./rolldown-runtime-XKyaHtl9.js";import{D as t,o as n}from"./query-DpSvkLJp.js";import{qr as r}from"./staticApi-BAjiwNc8.js";var i=e(r(),1);function a(e,r){let a=t(r),o=a.getQueryCache();return i.useSyncExternalStore(i.useCallback(e=>o.subscribe(n.batchCalls(e)),[o]),()=>a.isFetching(e),()=>a.isFetching(e))}export{a as t};

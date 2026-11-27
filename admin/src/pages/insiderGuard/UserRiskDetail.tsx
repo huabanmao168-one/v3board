@@ -1,11 +1,11 @@
 // 用户风险详情（「用户详情」标签页）：按用户 ID 查询评分摘要、最近事件（按小时汇总）、被下发过的节点（每人每节点一行）、审核记录；查到后可直接弹窗审核
 import { SearchOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Input, Tag, type TableColumnsType } from 'antd'
+import { Button, Input, Popconfirm, Tag, type TableColumnsType } from 'antd'
 import { useState, type ReactNode } from 'react'
 import { unwrap } from '@/api/request'
-import { fetchGuardUserDetail } from '@/api/services/insiderGuard'
-import type { GuardEvent, GuardReview, GuardUserDetail } from '@/api/types'
+import { fetchGuardDevices, fetchGuardUserDetail, resetGuardSubscription } from '@/api/services/insiderGuard'
+import type { GuardDevice, GuardEvent, GuardReview, GuardUserDetail } from '@/api/types'
 import { message } from '@/app/staticApi'
 import { Loading } from '@/components/Loading'
 import { ReviewModal } from './ReviewModal'
@@ -114,6 +114,7 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
             查询
           </Button>
           {data && (
+            <>
             <ReviewModal
               user={{
                 id: data.user_id,
@@ -125,6 +126,17 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
             >
               <Button>审核此用户</Button>
             </ReviewModal>
+            <Popconfirm
+              title="重置订阅后旧链接和旧节点凭据立即失效，确定吗？"
+              onConfirm={async () => {
+                const res = await resetGuardSubscription(data.user_id)
+                if (res.code !== 200 || res.data !== true) return
+                message.success('订阅已重置，旧链接已失效')
+              }}
+            >
+              <Button danger>重置订阅</Button>
+            </Popconfirm>
+            </>
           )}
         </>
       }
@@ -173,6 +185,7 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
                 <Metric label="1 小时 IP 数" value={data.risk.distinct_ips_1h} />
                 <Metric label="需人工复核" value={data.risk.manual_review_required ? '是' : '否'} />
               </div>
+              <DeviceList id={data.user_id} />
               <div style={{ fontWeight: 'bold', marginBottom: 6 }}>最近事件</div>
               <SubTable<GuardEvent> dataSource={data.events} columns={eventTableColumns} scroll={{ x: 830 }} />
               <div style={{ fontWeight: 'bold', marginBottom: 6 }}>被下发过的节点</div>
@@ -194,5 +207,23 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
         </Loading>
       )}
     </Section>
+  )
+}
+
+function DeviceList({ id }: { id: number }) {
+  const query = useQuery({ queryKey: ['insiderGuard', 'devices', id], queryFn: () => unwrap(fetchGuardDevices(id)) })
+  const columns: TableColumnsType<GuardDevice> = [
+    { title: '客户端 UA', dataIndex: 'ua', key: 'ua', render: (ua: string | null) => <Ellipsis text={ua} width={300} empty="未提供" /> },
+    { title: '订阅次数', dataIndex: 'pulls', key: 'pulls', width: 90 },
+    { title: 'IP 数', dataIndex: 'ips', key: 'ips', width: 80 },
+    { title: '地区', dataIndex: 'locations', key: 'locations', render: (l: string[]) => (l.length ? l.join('、') : '-') },
+    { title: '最近活动', dataIndex: 'last_at', key: 'last_at', width: 170, render: (t: number) => guardTime(t) },
+  ]
+  if (query.isError && !query.data) return <Failed>读取失败：设备信息暂时无法加载</Failed>
+  return (
+    <>
+      <div style={{ fontWeight: 'bold', marginBottom: 6 }}>活跃设备（最近 24 小时，按 UA 汇总）</div>
+      <SubTable<GuardDevice> rowKey="ua_hash" loading={query.isLoading} dataSource={query.data ?? []} columns={columns} scroll={{ x: 760 }} />
+    </>
   )
 }

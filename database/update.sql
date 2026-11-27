@@ -992,3 +992,12 @@ CREATE TABLE IF NOT EXISTS `v2_insider_guard_subscription_block` (
   UNIQUE KEY `bucket` (`ip_address`,`hour_start`,`reason`),
   KEY `last_at` (`last_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE IF NOT EXISTS `v2_insider_guard_whitelist` (
+  `user_id` int(11) NOT NULL,
+  `admin_id` int(11) DEFAULT NULL,
+  `reason` text NOT NULL,
+  `created_at` int(11) NOT NULL,
+  PRIMARY KEY (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='风控中心：白名单用户，不参与风险评分与自动处置';
