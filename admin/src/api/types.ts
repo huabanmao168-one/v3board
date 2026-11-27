@@ -474,6 +474,16 @@ export interface GuardRestrictedUser {
   created_at: number
 }
 
+/** 观察中的账号（insiderGuard/watchedUsers），响应顶层另有 total */
+export interface GuardWatchedUser {
+  user_id: number
+  email: string | null
+  admin_id: number | null
+  reason: string
+  created_at: number
+  risk_score: number
+}
+
 /** 风险用户（insiderGuard/users），响应顶层另有 hours / threshold */
 export interface GuardRiskUser {
   user_id: number

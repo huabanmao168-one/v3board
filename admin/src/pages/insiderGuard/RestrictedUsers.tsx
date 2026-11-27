@@ -1,7 +1,7 @@
 // 限制中账号（独占一个标签页）：列出所有被限制订阅的账号，可查看详情或直接解除限制
-import { ReloadOutlined } from '@ant-design/icons'
+import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { keepPreviousData, useQuery, type QueryKey } from '@tanstack/react-query'
-import { Button, type TableColumnsType, type TablePaginationConfig } from 'antd'
+import { Button, Input, type TableColumnsType, type TablePaginationConfig } from 'antd'
 import { useState } from 'react'
 import { ApiError } from '@/api/request'
 import { fetchGuardRestrictedUsers } from '@/api/services/insiderGuard'
@@ -9,7 +9,7 @@ import type { GuardRestrictedUser } from '@/api/types'
 import { paginationProps } from '@/hooks/usePagedList'
 import { useUi } from '@/stores/appearance'
 import { ReviewModal } from './ReviewModal'
-import { Ellipsis, Failed, guardKeys, guardTime, Note, Section, SubTable, userLabel } from './shared'
+import { Ellipsis, Failed, guardKeys, guardTime, Note, parseUserId, Section, SubTable, userLabel } from './shared'
 
 interface RestrictedUsersProps {
   /** 「详情」：切到「用户详情」标签页查询该用户 */
@@ -21,15 +21,33 @@ interface RestrictedUsersProps {
 export function RestrictedUsers({ onDetail, onReviewed }: RestrictedUsersProps) {
   const ui = useUi()
   const [page, setPage] = useState({ current: 1, pageSize: 20 })
+  const [userIdInput, setUserIdInput] = useState('')
+  const [emailInput, setEmailInput] = useState('')
+  const [filters, setFilters] = useState<{ user_id?: number; email?: string }>({})
+
   const query = useQuery({
-    queryKey: [...guardKeys.restricted, page] as QueryKey,
+    queryKey: [...guardKeys.restricted, page, filters] as QueryKey,
     queryFn: async () => {
-      const res = await fetchGuardRestrictedUsers(page)
+      const res = await fetchGuardRestrictedUsers({ ...page, ...filters })
       if (res.code !== 200) throw new ApiError(res.code, res.msg)
       return { rows: res.data ?? [], total: res.total ?? 0 }
     },
     placeholderData: keepPreviousData,
   })
+
+  const search = () => {
+    const userId = parseUserId(userIdInput)
+    const email = emailInput.trim()
+    setFilters({ user_id: userId, email: email || undefined })
+    setPage({ current: 1, pageSize: page.pageSize })
+  }
+
+  const clearSearch = () => {
+    setUserIdInput('')
+    setEmailInput('')
+    setFilters({})
+    setPage({ current: 1, pageSize: page.pageSize })
+  }
 
   const columns: TableColumnsType<GuardRestrictedUser> = [
     { title: '用户 ID', dataIndex: 'user_id', key: 'user_id', width: 90 },
@@ -63,13 +81,44 @@ export function RestrictedUsers({ onDetail, onReviewed }: RestrictedUsersProps) 
   ]
 
   const pagination: TablePaginationConfig = { ...paginationProps(ui), ...page, total: query.data?.total ?? 0 }
+  const hasFilters = filters.user_id !== undefined || filters.email !== undefined
 
   return (
     <Section
       extra={
-        <Button icon={<ReloadOutlined />} loading={query.isFetching} onClick={() => void query.refetch()}>
-          刷新
-        </Button>
+        <div className="d-flex" style={{ gap: 8 }}>
+          <Input
+            style={{ width: 120 }}
+            placeholder="用户 ID"
+            allowClear
+            value={userIdInput}
+            onChange={(e) => setUserIdInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') search()
+            }}
+          />
+          <Input
+            style={{ width: 160 }}
+            placeholder="邮箱关键词"
+            allowClear
+            value={emailInput}
+            onChange={(e) => setEmailInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') search()
+            }}
+          />
+          <Button type="primary" icon={<SearchOutlined />} loading={query.isFetching} onClick={search}>
+            搜索
+          </Button>
+          {hasFilters && (
+            <Button onClick={clearSearch}>
+              清除筛选
+            </Button>
+          )}
+          <Button icon={<ReloadOutlined />} loading={query.isFetching} onClick={() => void query.refetch()}>
+            刷新
+          </Button>
+        </div>
       }
     >
       <Note style={{ marginBottom: 12 }}>
@@ -85,7 +134,7 @@ export function RestrictedUsers({ onDetail, onReviewed }: RestrictedUsersProps) 
           columns={columns}
           pagination={pagination}
           scroll={{ x: 900 }}
-          locale={{ emptyText: '当前没有被限制的账号' }}
+          locale={{ emptyText: hasFilters ? '没有符合条件的记录' : '当前没有被限制的账号' }}
           onChange={(next) => setPage({ current: next.current ?? 1, pageSize: next.pageSize ?? page.pageSize })}
         />
       )}

@@ -94,19 +94,103 @@ class InsiderGuardController extends Controller
         ]);
     }
 
-    /** 限制中的账号：服务端分页，最近限制的在前，带邮箱、限制原因与操作管理员 */
+    /** 限制中的账号：服务端分页，最近限制的在前，带邮箱、限制原因与操作管理员；可按用户 ID、邮箱搜索 */
     public function restrictedUsers(Request $request)
     {
         $pageSize = max(10, min(100, (int)$request->input('pageSize', 20)));
         $current = max(1, min(100000, (int)$request->input('current', 1)));
-        $total = DB::table('v2_insider_guard_restrict')->count();
-        $rows = DB::table('v2_insider_guard_restrict')
-            ->orderByDesc('created_at')
+        $query = DB::table('v2_insider_guard_restrict');
+        // 按用户 ID 筛选
+        if ($request->filled('user_id')) {
+            $userId = $this->positiveInt($request->input('user_id'));
+            if ($userId === null) abort(422, '用户 ID 无效');
+            $query->where('user_id', $userId);
+        }
+        // 按邮箱筛选（需要联表）
+        if ($request->filled('email')) {
+            $email = mb_substr(trim($this->str($request, 'email')), 0, 255);
+            if ($email !== '') {
+                // 转义 LIKE 通配符防止被当作模糊匹配符号
+                $email = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $email);
+                $matchedIds = User::where('email', 'like', '%' . $email . '%')->limit(1000)->pluck('id');
+                if ($matchedIds->isEmpty()) {
+                    // 没有匹配的用户，直接返回空
+                    return response(['data' => [], 'total' => 0]);
+                }
+                if ($matchedIds->count() >= 1000) {
+                    abort(422, '匹配用户过多，请输入更精确的搜索词');
+                }
+                $query->whereIn('user_id', $matchedIds);
+            }
+        }
+        $total = (clone $query)->count();
+        $rows = $query->orderByDesc('created_at')
             ->orderByDesc('user_id')
             ->forPage($current, $pageSize)
             ->get(['user_id', 'admin_id', 'reason', 'created_at']);
         return response([
             'data' => $this->withEmails($rows)->values(),
+            'total' => $total,
+        ]);
+    }
+
+    /** 观察中的账号：被标记为「持续观察」但未被限制的用户，显示最近一次观察记录；可按用户 ID、邮箱搜索 */
+    public function watchedUsers(Request $request)
+    {
+        $pageSize = max(10, min(100, (int)$request->input('pageSize', 20)));
+        $current = max(1, min(100000, (int)$request->input('current', 1)));
+        // 子查询：每个用户最新的 watch 审核记录 ID
+        $latestReviews = DB::table('v2_insider_guard_review')
+            ->select('user_id', DB::raw('MAX(id) as latest_id'))
+            ->where('action', 'watch')
+            ->groupBy('user_id');
+        // 按用户 ID 筛选
+        if ($request->filled('user_id')) {
+            $userId = $this->positiveInt($request->input('user_id'));
+            if ($userId === null) abort(422, '用户 ID 无效');
+            $latestReviews->where('user_id', $userId);
+        }
+        // 按邮箱筛选（需要先查出匹配的用户 ID）
+        if ($request->filled('email')) {
+            $email = mb_substr(trim($this->str($request, 'email')), 0, 255);
+            if ($email !== '') {
+                // 转义 LIKE 通配符防止被当作模糊匹配符号
+                $email = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $email);
+                $matchedIds = User::where('email', 'like', '%' . $email . '%')->limit(1000)->pluck('id');
+                if ($matchedIds->isEmpty()) {
+                    return response(['data' => [], 'total' => 0]);
+                }
+                if ($matchedIds->count() >= 1000) {
+                    abort(422, '匹配用户过多，请输入更精确的搜索词');
+                }
+                $latestReviews->whereIn('user_id', $matchedIds);
+            }
+        }
+        // 主查询：联表取最新观察记录的详情，排除已被限制的用户
+        $rows = DB::table('v2_insider_guard_review as r')
+            ->joinSub($latestReviews, 'latest', function ($join) {
+                $join->on('r.id', '=', 'latest.latest_id');
+            })
+            ->leftJoin('v2_insider_guard_restrict as restrict', 'r.user_id', '=', 'restrict.user_id')
+            ->whereNull('restrict.user_id')
+            ->orderByDesc('r.created_at')
+            ->orderByDesc('r.user_id');
+        $total = (clone $rows)->count();
+        $data = $rows->forPage($current, $pageSize)->get(['r.user_id', 'r.admin_id', 'r.reason', 'r.created_at']);
+        // 附加邮箱和当前风险评分
+        $items = $this->withEmails($data)->map(function ($row) {
+            $risk = InsiderGuardService::score($row->user_id);
+            return [
+                'user_id' => (int)$row->user_id,
+                'email' => $row->email,
+                'admin_id' => $row->admin_id,
+                'reason' => $row->reason,
+                'created_at' => (int)$row->created_at,
+                'risk_score' => $risk['score'] ?? 0,
+            ];
+        });
+        return response([
+            'data' => $items->values(),
             'total' => $total,
         ]);
     }

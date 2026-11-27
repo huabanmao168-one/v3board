@@ -19,6 +19,7 @@ export const guardKeys = {
   users: (hours: GuardHours) => [...USERS_KEY, hours] as const,
   events: ['insiderGuard', 'events'],
   restricted: ['insiderGuard', 'restricted'],
+  watched: ['insiderGuard', 'watched'],
   userDetail: ['insiderGuard', 'userDetail'],
   config: ['config', 'insider_guard'],
 } as const

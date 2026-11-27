@@ -7,6 +7,7 @@ import type {
   GuardOverview,
   GuardReviewAction,
   GuardRestrictedUser,
+  GuardWatchedUser,
   GuardRiskUser,
   GuardUserDetail,
   GuardWhitelistUser,
@@ -21,8 +22,11 @@ export const fetchGuardOverview = () => get<GuardOverview>(guardPath('overview')
 /** 风险用户：按时段统计订阅次数与来源 IP 数并评分（响应顶层另有 hours / threshold） */
 export const fetchGuardUsers = (hours: GuardHours) => get<GuardRiskUser[]>(guardPath('users'), { hours })
 /** 限制中的账号（服务端分页，顶层 total），最近限制的在前 */
-export const fetchGuardRestrictedUsers = (params: { current: number; pageSize: number }) =>
+export const fetchGuardRestrictedUsers = (params: { current: number; pageSize: number; user_id?: number; email?: string }) =>
   get<GuardRestrictedUser[]>(guardPath('restrictedUsers'), params)
+/** 观察中的账号（服务端分页，顶层 total），最近标记的在前 */
+export const fetchGuardWatchedUsers = (params: { current: number; pageSize: number; user_id?: number; email?: string }) =>
+  get<GuardWatchedUser[]>(guardPath('watchedUsers'), params)
 /** 事件列表（服务端分页，顶层 total），可按用户 ID、事件类型筛选 */
 export const fetchGuardEvents = (params: {
   current: number

@@ -18,12 +18,13 @@ import { OverviewCards } from './OverviewCards'
 import { SubscriptionBlocks } from './SubscriptionBlocks'
 import { RecentEvents } from './RecentEvents'
 import { RestrictedUsers } from './RestrictedUsers'
+import { WatchedUsers } from './WatchedUsers'
 import { Whitelist } from './Whitelist'
 import { RiskUsers } from './RiskUsers'
 import { guardKeys, hoursLabel, Note, useGuardUsers } from './shared'
 import { UserRiskDetail } from './UserRiskDetail'
 
-type TabKey = 'overview' | 'restricted' | 'whitelist' | 'events' | 'blocks' | 'detail' | 'geoip' | 'settings'
+type TabKey = 'overview' | 'restricted' | 'watched' | 'whitelist' | 'events' | 'blocks' | 'detail' | 'geoip' | 'settings'
 
 /** 标签页内容区：与系统配置页一样放在 block-content 里（有内边距） */
 function Pane({ children }: { children: ReactNode }) {
@@ -43,6 +44,7 @@ export default function InsiderGuardPage() {
   // 前缀匹配：当前查询中的任何用户详情都重新拉取
   const refetchUserDetail = useRefetch(guardKeys.userDetail)
   const refetchRestricted = useRefetch(guardKeys.restricted)
+  const refetchWatched = useRefetch(guardKeys.watched)
   const users = useGuardUsers(hours)
   const highRisk = users.data ? users.data.filter((u) => u.high_risk).length : undefined
 
@@ -54,6 +56,7 @@ export default function InsiderGuardPage() {
     void refetchOverview()
     void refetchUserDetail()
     void refetchRestricted()
+    void refetchWatched()
     // 限制 / 解除后风险用户表的「已限制」标记要变
     void queryClient.invalidateQueries({ queryKey: guardKeys.usersAll })
   }
@@ -81,6 +84,15 @@ export default function InsiderGuardPage() {
       children: (
         <Pane>
           <RestrictedUsers onDetail={showDetail} onReviewed={reviewed} />
+        </Pane>
+      ),
+    },
+    {
+      key: 'watched',
+      label: '观察中',
+      children: (
+        <Pane>
+          <WatchedUsers onDetail={showDetail} onReviewed={reviewed} />
         </Pane>
       ),
     },
