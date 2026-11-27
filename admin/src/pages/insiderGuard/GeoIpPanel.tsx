@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Button, Input } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { get, unwrap } from '@/api/request'
 import { adminPath } from '@/app/settings'
@@ -49,7 +50,10 @@ export function GeoIpPanel() {
       <Note style={{ marginBottom: 12 }}>
         数据库文件放在站点根目录下的 <code>storage/app/geoip/</code>：IPv4 文件名 <code>ip2region_v4.xdb</code>，IPv6 文件名 <code>ip2region_v6.xdb</code>，并确保 PHP 进程可读。优先选带区县和 IP 用途的满载版，精简版只提供文件内已有的字段。
       </Note>
-      {status.data ? <p>IPv4 {statusLabel[status.data.ipv4]} · IPv6 {statusLabel[status.data.ipv6]}</p> : <p>{status.isError ? '读取数据库状态失败' : '正在读取数据库状态'}</p>}
+      <div className="d-flex align-items-center" style={{ gap: 12, marginBottom: 16 }}>
+        {status.data ? <p className="mb-0">IPv4 {statusLabel[status.data.ipv4]} · IPv6 {statusLabel[status.data.ipv6]}</p> : <p className="mb-0">{status.isError ? '读取数据库状态失败' : '正在读取数据库状态'}</p>}
+        <Button icon={<ReloadOutlined />} loading={status.isFetching} onClick={() => void status.refetch()} size="small">刷新</Button>
+      </div>
       <div className="d-flex" style={{ gap: 8, maxWidth: 420 }}>
         <Input aria-label="IP 地址" placeholder="输入 IPv4 或 IPv6 地址" value={input} onChange={(event) => setInput(event.target.value)} onPressEnter={submit} />
         <Button type="primary" loading={lookup.isFetching} onClick={submit}>查询</Button>
