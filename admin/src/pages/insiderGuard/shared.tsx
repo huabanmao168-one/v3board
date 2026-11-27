@@ -23,12 +23,12 @@ export const guardKeys = {
   config: ['config', 'insider_guard'],
 } as const
 
-/** 用户 ID 输入框的值：只接受纯数字且 ≥ 1，其它返回 undefined */
+/** 用户 ID 输入框的值：只接受纯数字且 ≥ 1，不超过 int(11) 上限，其它返回 undefined */
 export function parseUserId(text: string): number | undefined {
   const value = text.trim()
   if (!/^\d+$/.test(value)) return undefined
   const id = Number(value)
-  return id >= 1 && Number.isSafeInteger(id) ? id : undefined
+  return id >= 1 && id <= 2147483647 ? id : undefined
 }
 
 /** 风险用户列表：统计卡片与风险用户表共用同一个查询（同 key 只发一个请求） */

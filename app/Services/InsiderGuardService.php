@@ -90,7 +90,7 @@ class InsiderGuardService
         self::deliveries((int)$user->id, $servers);
     }
 
-    /** 用户是否被限制；缓存或查询失败按未限制处理，不影响订阅 */
+    /** 用户是否被限制；缓存失败时降级查数据库，数据库也失败时按未限制处理（优先可用性） */
     public static function isRestricted(int $userId): bool
     {
         try {
@@ -100,7 +100,13 @@ class InsiderGuardService
             return is_array($ids) && in_array($userId, $ids, true);
         } catch (\Throwable $e) {
             self::logWriteError('InsiderGuard restrict lookup unavailable', $e);
-            return false;
+            // 缓存失败时降级直接查数据库
+            try {
+                return DB::table('v2_insider_guard_restrict')->where('user_id', $userId)->exists();
+            } catch (\Throwable $dbError) {
+                // 数据库也失败时返回 false，优先保证订阅可用性；如需优先安全性可改为 true
+                return false;
+            }
         }
     }
 
@@ -373,7 +379,7 @@ class InsiderGuardService
         return $names;
     }
 
-    /** 清理过期的活动 / 节点下发 / UA 字典记录（保留 1～365 天）与已删除用户的限制记录，由定时任务每小时调用 */
+    /** 清理过期的活动 / 节点下发 / UA 字典记录（保留 1～365 天）与已删除用户的限制/白名单记录，由定时任务每小时调用 */
     public static function cleanup(): array
     {
         $days = max(1, min(365, (int)self::setting('retention_days', self::DEFAULT_RETENTION_DAYS)));
@@ -386,10 +392,12 @@ class InsiderGuardService
             'v2_insider_guard_ua' => ['last_seen', $cutoff - self::UA_SEEN_SECONDS, 'ua_hash'],
         ];
         $counts = [];
-        // 用户删除时限制表没有联动，顺带清掉已不存在用户的限制记录
+        // 用户删除时限制表和白名单表没有联动，顺带清掉已不存在用户的记录
         $counts['v2_insider_guard_restrict'] = DB::table('v2_insider_guard_restrict')
             ->whereNotIn('user_id', User::query()->select('id'))->delete();
         if ($counts['v2_insider_guard_restrict'] > 0) self::forgetQuietly(self::RESTRICT_CACHE_KEY);
+        $counts['v2_insider_guard_whitelist'] = DB::table('v2_insider_guard_whitelist')
+            ->whereNotIn('user_id', User::query()->select('id'))->delete();
         foreach ($targets as $table => [$column, $before, $orderBy]) {
             // 分批删，避免一条大 DELETE 长时间持锁；带 ORDER BY 让语句级 binlog 不报 unsafe
             $counts[$table] = 0;
