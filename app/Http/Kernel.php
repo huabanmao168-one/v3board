@@ -14,6 +14,7 @@ class Kernel extends HttpKernel
      * @var array
      */
     protected $middleware = [
+        \App\Http\Middleware\CloudflareRealIp::class,
         \App\Http\Middleware\CORS::class,
         \App\Http\Middleware\UAfilter::class,
         \App\Http\Middleware\TrustProxies::class,
