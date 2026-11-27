@@ -47,6 +47,20 @@ class CloudflareRealIpTest extends TestCase
         $this->assertSame('203.0.113.9', $this->ip(['REMOTE_ADDR' => '172.64.0.1', 'HTTP_CF_CONNECTING_IP' => '203.0.113.9']));
     }
 
+    public function testConfiguredHeaderNameIsUsed(): void
+    {
+        config(['v2board.client_ip_header' => 'Ali-Cdn-Real-Ip']);
+        $this->assertSame('203.0.113.9', $this->ip(['REMOTE_ADDR' => '10.0.0.1', 'HTTP_ALI_CDN_REAL_IP' => '203.0.113.9', 'HTTP_CF_CONNECTING_IP' => '198.51.100.1']));
+    }
+
+    public function testForwardedListAndPortAreParsed(): void
+    {
+        $this->assertSame('203.0.113.9', CloudflareRealIp::parse('203.0.113.9, 10.0.0.1'));
+        $this->assertSame('203.0.113.9', CloudflareRealIp::parse('203.0.113.9:51234'));
+        $this->assertSame('2001:db8::1', CloudflareRealIp::parse('[2001:db8::1]:443'));
+        $this->assertSame('', CloudflareRealIp::parse('unknown'));
+    }
+
     public function testInvalidHeaderKeepsThePeerAddress(): void
     {
         config(['v2board.trust_cf_connecting_ip' => 1]);

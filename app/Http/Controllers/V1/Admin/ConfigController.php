@@ -198,7 +198,7 @@ class ConfigController extends Controller
                 'subscribe_ingress_block_oversea' => config('v2board.subscribe_ingress_block_oversea'),
                 'subscribe_ingress_allow_hk_mo_tw' => config('v2board.subscribe_ingress_allow_hk_mo_tw'),
                 'subscribe_ingress_block_browser' => config('v2board.subscribe_ingress_block_browser'),
-                'trust_cf_connecting_ip' => (int) config('v2board.trust_cf_connecting_ip', 0),
+                'client_ip_header' => (string) (config('v2board.client_ip_header') ?: ((int) config('v2board.trust_cf_connecting_ip', 0) === 1 ? 'CF-Connecting-IP' : '')),
                 'subscribe_ingress_trust_header' => (int) config('v2board.subscribe_ingress_trust_header', 0),
                 'insider_guard_risk_threshold' => (int) config('v2board.insider_guard_risk_threshold', 50),
                 'insider_guard_retention_days' => (int) config('v2board.insider_guard_retention_days', 3),

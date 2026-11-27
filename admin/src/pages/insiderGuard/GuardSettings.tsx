@@ -18,13 +18,13 @@ const CLOUD_LABELS: Record<string, string> = {
 }
 
 const ingressLists = [
+  ['client_ip_header', '访客 IP 请求头', '站点在 CDN 后面时，填 CDN 回源带来的访客 IP 请求头名称，登录、订阅、工单等记录才不会显示 CDN 节点地址。常见：Cloudflare 填 CF-Connecting-IP，阿里云 CDN 填 Ali-Cdn-Real-Ip，其他多为 X-Real-IP 或 X-Forwarded-For（取第一个地址）。留空不处理；源站应只允许 CDN 回源，否则直连可伪造。'],
   ['subscribe_ingress_proxies', '订阅入口可信代理', '填写 Nginx 来源 IP 或网段，每行一个。配置后仅接受这些代理。'],
   ['subscribe_ingress_allow_ips', '订阅入口 IP 例外', '填写允许跳过入口拦截的 IP 或网段，每行一个。'],
   ['subscribe_ingress_block_ua', '禁止的 UA 关键词', '每行一个关键词，忽略大小写。'],
 ] as const
 
 const ingressSwitches = [
-  ['trust_cf_connecting_ip', '站点在 Cloudflare 后面', '用 CF-Connecting-IP 作为访客 IP，登录、订阅、工单等记录不再显示 Cloudflare 节点地址。只在站点确实经过 Cloudflare、且源站只允许 Cloudflare 回源时开启，否则直连源站的请求可以伪造 IP。'],
   ['subscribe_ingress_trust_header', '信任入口请求头', '直接采用 X-Subscription-Client-IP（或 X-Sub-Panel-Client-IP）里的 IP，不校验来源地址，适合中转经过 CDN 回源的情况。开启后「可信代理」不再生效；知道请求头名称的人可以伪造 IP。'],
   ['subscribe_ingress_block_oversea', '禁止海外 IP 拉取', '使用可信代理提供的地区代码。缺少地区信息时拒绝。'],
   ['subscribe_ingress_allow_hk_mo_tw', '允许港澳台 IP', '开启海外限制时，同时允许 HK、MO、TW。'],
@@ -52,6 +52,7 @@ type NumberKey = Exclude<keyof GuardConfig, 'subscribe_ingress_cloud_providers' 
 
 const DEFAULTS: GuardConfig = {
   subscribe_ingress_cloud_providers: [],
+  client_ip_header: '',
   subscribe_ingress_proxies: '',
   subscribe_ingress_allow_ips: '',
   subscribe_ingress_block_ua: '',
@@ -59,7 +60,6 @@ const DEFAULTS: GuardConfig = {
   subscribe_ingress_allow_hk_mo_tw: 0,
   subscribe_ingress_block_browser: 0,
   subscribe_ingress_trust_header: 0,
-  trust_cf_connecting_ip: 0,
   insider_guard_risk_threshold: 50,
   insider_guard_retention_days: 3,
   insider_guard_auto_notify: 0,
@@ -76,6 +76,7 @@ function normalize(raw: Record<string, unknown> | undefined): GuardConfig {
   const providers = raw?.subscribe_ingress_cloud_providers
   return {
     subscribe_ingress_cloud_providers: Array.isArray(providers) ? providers.filter((value): value is string => typeof value === 'string') : [],
+    client_ip_header: String(raw?.client_ip_header ?? ''),
     subscribe_ingress_proxies: String(raw?.subscribe_ingress_proxies ?? ''),
     subscribe_ingress_allow_ips: String(raw?.subscribe_ingress_allow_ips ?? ''),
     subscribe_ingress_block_ua: String(raw?.subscribe_ingress_block_ua ?? ''),
@@ -83,7 +84,6 @@ function normalize(raw: Record<string, unknown> | undefined): GuardConfig {
     subscribe_ingress_allow_hk_mo_tw: int('subscribe_ingress_allow_hk_mo_tw'),
     subscribe_ingress_block_browser: int('subscribe_ingress_block_browser'),
     subscribe_ingress_trust_header: int('subscribe_ingress_trust_header'),
-    trust_cf_connecting_ip: int('trust_cf_connecting_ip'),
     insider_guard_risk_threshold: int('insider_guard_risk_threshold'),
     insider_guard_retention_days: int('insider_guard_retention_days'),
     insider_guard_auto_notify: int('insider_guard_auto_notify'),
