@@ -14,6 +14,7 @@ import { eventColumns, Failed, guardKeys, Note, parseUserId, Section, SubTable }
 interface EventFilter {
   user_id: string
   email: string
+  ip: string
   event_type: GuardEventType | ''
 }
 
@@ -27,7 +28,7 @@ const columns = eventColumns({ withUser: true, typeTag: true })
 
 export function RecentEvents() {
   const ui = useUi()
-  const [draft, setDraft] = useState<EventFilter>({ user_id: '', email: '', event_type: '' })
+  const [draft, setDraft] = useState<EventFilter>({ user_id: '', email: '', ip: '', event_type: '' })
   const [filter, setFilter] = useState<EventFilter>(draft)
   const [page, setPage] = useState({ current: 1, pageSize: 20 })
 
@@ -39,6 +40,7 @@ export function RecentEvents() {
         ...page,
         user_id: Number.isNaN(userId) ? undefined : userId,
         email: filter.email || undefined,
+        ip: filter.ip || undefined,
         event_type: filter.event_type || undefined,
       })
       if (res.code !== 200) throw new ApiError(res.code, res.msg)
@@ -50,17 +52,18 @@ export function RecentEvents() {
   const search = () => {
     const userId = draft.user_id.trim()
     const email = draft.email.trim()
+    const ip = draft.ip.trim()
     // 只接受纯数字且 ≥ 1 的用户 ID（与「用户详情」一致），否则不发请求
     if (userId && parseUserId(userId) === undefined) {
       message.error('请输入有效的用户 ID')
       return
     }
     // 条件没变（包括读取失败后再点「筛选」）：key 不变不会自动重新请求，这里直接重拉
-    if (userId === filter.user_id && email === filter.email && draft.event_type === filter.event_type && page.current === 1) {
+    if (userId === filter.user_id && email === filter.email && ip === filter.ip && draft.event_type === filter.event_type && page.current === 1) {
       void query.refetch()
       return
     }
-    setFilter({ user_id: userId, email, event_type: draft.event_type })
+    setFilter({ user_id: userId, email, ip, event_type: draft.event_type })
     setPage((p) => ({ ...p, current: 1 }))
   }
 
@@ -86,6 +89,16 @@ export function RecentEvents() {
             allowClear
             value={draft.email}
             onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') search()
+            }}
+          />
+          <Input
+            style={{ width: 140 }}
+            placeholder="IP 地址"
+            allowClear
+            value={draft.ip}
+            onChange={(e) => setDraft({ ...draft, ip: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === 'Enter') search()
             }}

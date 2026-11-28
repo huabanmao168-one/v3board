@@ -27,11 +27,13 @@ export const fetchGuardRestrictedUsers = (params: { current: number; pageSize: n
 /** 观察中的账号（服务端分页，顶层 total），最近标记的在前 */
 export const fetchGuardWatchedUsers = (params: { current: number; pageSize: number; user_id?: number; email?: string }) =>
   get<GuardWatchedUser[]>(guardPath('watchedUsers'), params)
-/** 事件列表（服务端分页，顶层 total），可按用户 ID、事件类型筛选 */
+/** 事件列表（服务端分页，顶层 total），可按用户 ID、邮箱、IP、事件类型筛选 */
 export const fetchGuardEvents = (params: {
   current: number
   pageSize: number
   user_id?: number
+  email?: string
+  ip?: string
   event_type?: GuardEventType
 }) => get<GuardEvent[]>(guardPath('events'), params)
 export const fetchGuardUserDetail = (id: number) => get<GuardUserDetail>(guardPath('userDetail'), { id })
