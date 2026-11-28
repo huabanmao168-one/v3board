@@ -38,20 +38,44 @@ class InsiderGuardController extends Controller
 
     public function subscriptionBlocks(Request $request)
     {
-        $rows = DB::table('v2_insider_guard_subscription_block');
+        $rows = DB::table('v2_insider_guard_subscription_block as b');
+
         if ($request->filled('ip')) {
             $ip = $request->input('ip');
             if (!is_string($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
                 abort(422, '请输入有效的 IPv4 或 IPv6 地址');
             }
-            $rows->where('ip_address', inet_ntop(inet_pton($ip)));
+            $rows->where('b.ip_address', inet_ntop(inet_pton($ip)));
         }
+
+        if ($request->filled('email')) {
+            $email = trim($request->input('email'));
+            $userIds = User::where('email', 'like', '%' . $email . '%')->pluck('id');
+            if ($userIds->isEmpty()) {
+                return response(['data' => [], 'total' => 0]);
+            }
+            $rows->whereIn('b.user_id', $userIds);
+        }
+
+        if ($request->filled('user_id')) {
+            $userId = (int) $request->input('user_id');
+            if ($userId > 0 && $userId <= self::MAX_ID) {
+                $rows->where('b.user_id', $userId);
+            }
+        }
+
         $pageSize = max(10, min(100, (int) $request->input('pageSize', 20)));
         $current = max(1, min(100000, (int) $request->input('current', 1)));
-        return response([
-            'total' => (clone $rows)->count(),
-            'data' => $rows->orderByDesc('last_at')->orderByDesc('id')->forPage($current, $pageSize)->get(),
-        ]);
+        $total = (clone $rows)->count();
+        $data = $rows->orderByDesc('b.last_at')->orderByDesc('b.id')->forPage($current, $pageSize)->get(['b.*']);
+
+        $userIds = $data->pluck('user_id')->filter()->unique();
+        $emails = $userIds->isEmpty() ? collect() : User::whereIn('id', $userIds)->pluck('email', 'id');
+        foreach ($data as $row) {
+            $row->email = $row->user_id ? ($emails[$row->user_id] ?? null) : null;
+        }
+
+        return response(['total' => $total, 'data' => $data->values()]);
     }
 
     public function geoIp(Request $request)

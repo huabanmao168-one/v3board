@@ -19,7 +19,7 @@ interface WhitelistProps {
 export function Whitelist({ onChanged }: WhitelistProps) {
   const ui = useUi()
   const [page, setPage] = useState({ current: 1, pageSize: 20 })
-  const [id, setId] = useState('')
+  const [email, setEmail] = useState('')
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -34,16 +34,16 @@ export function Whitelist({ onChanged }: WhitelistProps) {
   })
 
   const add = async () => {
-    const userId = parseUserId(id)
-    if (userId === undefined) return message.error('请输入有效的用户 ID')
+    const emailValue = email.trim()
+    if (!emailValue) return message.error('请输入邮箱')
     const text = reason.trim()
     if ([...text].length < 8) return message.error('原因至少 8 个字')
     setSaving(true)
-    const res = await addGuardWhitelist({ id: userId, reason: text })
+    const res = await addGuardWhitelist({ email: emailValue, reason: text })
     setSaving(false)
     if (res.code !== 200 || res.data !== true) return
     message.success('已加入白名单')
-    setId('')
+    setEmail('')
     setReason('')
     void query.refetch()
     onChanged()
@@ -81,7 +81,7 @@ export function Whitelist({ onChanged }: WhitelistProps) {
     <Section
       extra={
         <>
-          <Input style={{ width: 140 }} placeholder='用户 ID' allowClear value={id} onChange={(e) => setId(e.target.value)} />
+          <Input style={{ width: 200 }} placeholder='邮箱' allowClear value={email} onChange={(e) => setEmail(e.target.value)} />
           <Input
             style={{ width: 260 }}
             placeholder='原因，至少 8 个字，例如：已确认为多设备自用'
