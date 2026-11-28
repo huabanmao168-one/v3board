@@ -306,12 +306,34 @@ class InsiderGuardController extends Controller
         // 总数不联 UA 字典，只走活动表的索引
         $count = DB::table('v2_insider_guard_activity');
         $rows = $this->activities();
+
         if ($request->filled('user_id')) {
             $userId = $this->positiveInt($request->input('user_id'));
             if ($userId === null) abort(422, '用户 ID 无效');
             $count->where('user_id', $userId);
             $rows->where('a.user_id', $userId);
         }
+
+        if ($request->filled('email')) {
+            $email = trim($request->input('email'));
+            $userIds = User::where('email', 'like', '%' . $email . '%')->pluck('id');
+            if ($userIds->isEmpty()) {
+                return response(['data' => [], 'total' => 0]);
+            }
+            $count->whereIn('user_id', $userIds);
+            $rows->whereIn('a.user_id', $userIds);
+        }
+
+        if ($request->filled('ip')) {
+            $ip = $request->input('ip');
+            if (!is_string($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
+                abort(422, '请输入有效的 IPv4 或 IPv6 地址');
+            }
+            $normalized = inet_ntop(inet_pton($ip));
+            $count->where('ip_address', $normalized);
+            $rows->where('a.ip_address', $normalized);
+        }
+
         if ($request->filled('event_type')) {
             $eventType = $this->str($request, 'event_type');
             if (!in_array($eventType, [InsiderGuardService::EVENT_LOGIN, InsiderGuardService::EVENT_SUBSCRIPTION], true)) {
@@ -320,6 +342,7 @@ class InsiderGuardController extends Controller
             $count->where('event_type', $eventType);
             $rows->where('a.event_type', $eventType);
         }
+
         return response([
             'data' => $this->withEmails($rows->forPage($current, $pageSize)->get(self::ACTIVITY_COLUMNS)),
             'total' => $count->count(),
