@@ -43,8 +43,8 @@ export const restrictGuardUser = (params: { id: number; reason: string }) =>
   post<boolean>(guardPath('restrict'), { ...params, confirm: 1 })
 /** 解除限制：恢复真实入口；原因 8～1000 字 */
 export const releaseGuardUser = (params: { id: number; reason: string }) => post<boolean>(guardPath('release'), params)
-/** 白名单（服务端分页，顶层 total）：不参与风险评分与自动处置 */
-export const fetchGuardWhitelist = (params: { current: number; pageSize: number }) =>
+/** 白名单（服务端分页，顶层 total）：不参与风险评分与自动处置，可按邮箱筛选 */
+export const fetchGuardWhitelist = (params: { current: number; pageSize: number; email?: string }) =>
   get<GuardWhitelistUser[]>(guardPath('whitelist'), params)
 export const addGuardWhitelist = (params: { id: number; reason: string }) => post<boolean>(guardPath('whitelistAdd'), params)
 export const removeGuardWhitelist = (id: number) => post<boolean>(guardPath('whitelistRemove'), { id })

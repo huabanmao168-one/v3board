@@ -19,14 +19,16 @@ interface WhitelistProps {
 export function Whitelist({ onChanged }: WhitelistProps) {
   const ui = useUi()
   const [page, setPage] = useState({ current: 1, pageSize: 20 })
-  const [email, setEmail] = useState('')
+  const [draftEmail, setDraftEmail] = useState('')
+  const [emailFilter, setEmailFilter] = useState('')
+  const [id, setId] = useState('')
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
 
   const query = useQuery({
-    queryKey: ['insiderGuard', 'whitelist', page],
+    queryKey: ['insiderGuard', 'whitelist', page, emailFilter],
     queryFn: async () => {
-      const res = await fetchGuardWhitelist(page)
+      const res = await fetchGuardWhitelist({ ...page, email: emailFilter || undefined })
       if (res.code !== 200) throw new ApiError(res.code, res.msg)
       return { rows: res.data ?? [], total: res.total ?? 0 }
     },
@@ -34,19 +36,29 @@ export function Whitelist({ onChanged }: WhitelistProps) {
   })
 
   const add = async () => {
-    const emailValue = email.trim()
-    if (!emailValue) return message.error('请输入邮箱')
+    const userId = parseUserId(id)
+    if (userId === undefined) return message.error('请输入有效的用户 ID')
     const text = reason.trim()
     if ([...text].length < 8) return message.error('原因至少 8 个字')
     setSaving(true)
-    const res = await addGuardWhitelist({ email: emailValue, reason: text })
+    const res = await addGuardWhitelist({ id: userId, reason: text })
     setSaving(false)
     if (res.code !== 200 || res.data !== true) return
     message.success('已加入白名单')
-    setEmail('')
+    setId('')
     setReason('')
     void query.refetch()
     onChanged()
+  }
+
+  const searchEmail = () => {
+    const email = draftEmail.trim()
+    if (email === emailFilter && page.current === 1) {
+      void query.refetch()
+    } else {
+      setEmailFilter(email)
+      setPage((p) => ({ ...p, current: 1 }))
+    }
   }
 
   const remove = async (userId: number) => {
@@ -81,10 +93,12 @@ export function Whitelist({ onChanged }: WhitelistProps) {
     <Section
       extra={
         <>
-          <Input style={{ width: 200 }} placeholder='邮箱' allowClear value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input style={{ width: 160 }} placeholder='邮箱关键词' allowClear value={draftEmail} onChange={(e) => setDraftEmail(e.target.value)} onPressEnter={searchEmail} />
+          <Button onClick={searchEmail}>搜索</Button>
+          <Input style={{ width: 100 }} placeholder='用户 ID' allowClear value={id} onChange={(e) => setId(e.target.value)} />
           <Input
-            style={{ width: 260 }}
-            placeholder='原因，至少 8 个字，例如：已确认为多设备自用'
+            style={{ width: 240 }}
+            placeholder='原因，至少 8 个字'
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             onPressEnter={() => void add()}

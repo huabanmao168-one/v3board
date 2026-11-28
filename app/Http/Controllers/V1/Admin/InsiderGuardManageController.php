@@ -23,8 +23,21 @@ class InsiderGuardManageController extends Controller
     {
         $pageSize = max(10, min(100, (int)$request->input('pageSize', 20)));
         $current = max(1, min(100000, (int)$request->input('current', 1)));
-        $total = DB::table('v2_insider_guard_whitelist')->count();
-        $rows = DB::table('v2_insider_guard_whitelist')
+
+        $query = DB::table('v2_insider_guard_whitelist');
+
+        // 按邮箱筛选
+        if ($request->filled('email')) {
+            $email = trim($request->input('email'));
+            $userIds = User::where('email', 'like', '%' . $email . '%')->pluck('id');
+            if ($userIds->isEmpty()) {
+                return response(['data' => [], 'total' => 0]);
+            }
+            $query->whereIn('user_id', $userIds);
+        }
+
+        $total = $query->count();
+        $rows = $query
             ->orderByDesc('created_at')
             ->orderByDesc('user_id')
             ->forPage($current, $pageSize)
@@ -39,16 +52,11 @@ class InsiderGuardManageController extends Controller
     /** 加入白名单：不再进入高风险列表，也不会被自动处置；需填写原因 */
     public function whitelistAdd(Request $request)
     {
-        $email = $request->input('email');
-        if (!is_string($email) || !filter_var(trim($email), FILTER_VALIDATE_EMAIL)) {
-            abort(422, '请输入有效的邮箱地址');
-        }
-        $user = User::where('email', trim($email))->first();
-        if (!$user) abort(500, '用户不存在');
-
+        $id = $this->userId($request);
         $reason = $this->reason($request, 8, '白名单原因需 8～1000 字');
+        if (!User::find($id)) abort(500, '用户不存在');
         DB::table('v2_insider_guard_whitelist')->upsert(
-            [['user_id' => $user->id, 'admin_id' => (int)$request->user['id'], 'reason' => $reason, 'created_at' => time()]],
+            [['user_id' => $id, 'admin_id' => (int)$request->user['id'], 'reason' => $reason, 'created_at' => time()]],
             ['user_id'],
             ['admin_id', 'reason']
         );
