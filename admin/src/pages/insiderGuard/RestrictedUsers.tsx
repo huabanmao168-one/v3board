@@ -9,7 +9,7 @@ import type { GuardRestrictedUser } from '@/api/types'
 import { paginationProps } from '@/hooks/usePagedList'
 import { useUi } from '@/stores/appearance'
 import { ReviewModal } from './ReviewModal'
-import { Ellipsis, Failed, guardKeys, guardTime, Note, parseUserId, Section, SubTable, userLabel } from './shared'
+import { Ellipsis, Failed, guardKeys, guardTime, Note, parseUserId, Section, SPACING, SubTable, userLabel } from './shared'
 
 interface RestrictedUsersProps {
   /** 「详情」：切到「用户详情」标签页查询该用户 */
@@ -60,7 +60,7 @@ export function RestrictedUsers({ onDetail, onReviewed }: RestrictedUsersProps) 
       key: 'action',
       width: 170,
       render: (_: unknown, row) => (
-        <div className="d-flex" style={{ gap: 8 }}>
+        <div className="d-flex" style={{ gap: SPACING.sm }}>
           <Button size="small" onClick={() => onDetail(row.user_id)}>
             详情
           </Button>
@@ -86,7 +86,7 @@ export function RestrictedUsers({ onDetail, onReviewed }: RestrictedUsersProps) 
   return (
     <Section
       extra={
-        <div className="d-flex" style={{ gap: 8 }}>
+        <div className="d-flex" style={{ gap: SPACING.sm }}>
           <Input
             style={{ width: 120 }}
             placeholder="用户 ID"
@@ -121,7 +121,7 @@ export function RestrictedUsers({ onDetail, onReviewed }: RestrictedUsersProps) 
         </div>
       }
     >
-      <Note style={{ marginBottom: 12 }}>
+      <Note style={{ marginBottom: SPACING.md }}>
         被限制的账号拉取订阅和客户端配置时只会得到提示节点，仍可登录面板。点「解除限制」恢复真实节点，需填写原因并留下审核记录。
       </Note>
       {query.isError && !query.data ? (

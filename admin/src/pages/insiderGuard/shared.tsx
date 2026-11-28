@@ -34,7 +34,16 @@ export function parseUserId(text: string): number | undefined {
 
 /** 风险用户列表：统计卡片与风险用户表共用同一个查询（同 key 只发一个请求） */
 export function useGuardUsers(hours: GuardHours) {
-  return useQuery({ queryKey: guardKeys.users(hours), queryFn: () => unwrap(fetchGuardUsers(hours)) })
+  const USE_MOCK = import.meta.env.DEV
+  return useQuery({
+    queryKey: guardKeys.users(hours),
+    queryFn: USE_MOCK
+      ? async () => {
+          const { mockRiskUsers } = await import('./mockData')
+          return mockRiskUsers
+        }
+      : () => unwrap(fetchGuardUsers(hours))
+  })
 }
 
 export const HOURS_OPTIONS: Array<{ value: GuardHours; label: string }> = [
@@ -69,16 +78,26 @@ export const userLabel = (email: string | null | undefined, userId: number | nul
 /** 单元格内容不换行（IP、归属地等），表格靠横向滚动容纳 */
 export const NOWRAP: CSSProperties = { whiteSpace: 'nowrap' }
 
+/** 统一的间距系统（8px 网格） */
+export const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  xxl: 32,
+} as const
+
 export const MUTED: CSSProperties = { fontSize: 12, color: 'var(--v2b-text-muted, #666)' }
 
 /** 分区下方 / 控件旁的灰色小字说明 */
 export function Note({ children, style }: { children: ReactNode; style?: CSSProperties }) {
-  return <div style={{ ...MUTED, ...style }}>{children}</div>
+  return <div style={{ fontSize: 12, color: 'var(--v2b-text-muted, #666)', ...style }}>{children}</div>
 }
 
 /** 表格 / 卡片位置上的占位文字：读取失败、暂无数据、还没查询 */
 export function Failed({ children }: { children: ReactNode }) {
-  return <div style={{ ...MUTED, padding: '12px 0 16px' }}>{children}</div>
+  return <div style={{ fontSize: 12, color: 'var(--v2b-text-muted, #666)', padding: `${SPACING.md}px 0 ${SPACING.lg}px` }}>{children}</div>
 }
 
 /**
@@ -91,7 +110,7 @@ export function EventTime({ event }: { event: Pick<GuardEvent, 'times' | 'first_
     <>
       {guardTime(event.last_at)}
       {event.times > 1 && (
-        <div style={MUTED}>
+        <div style={{ fontSize: 12, color: 'var(--v2b-text-muted, #666)' }}>
           首次 {event.first_at ? formatTime(event.first_at, sameDay ? 'HH:mm:ss' : 'MM-DD HH:mm:ss') : '-'}
         </div>
       )}
@@ -151,7 +170,7 @@ export function eventColumns({
       render: (_: unknown, row: GuardEvent) => isMergedBucket(row) ? '-' : (
         <>
           <div style={NOWRAP}>{row.ip_location || '未知'}</div>
-          {(row.ip_isp || row.ip_usage) && <small style={{ ...MUTED, ...NOWRAP }}>{[row.ip_isp, row.ip_usage].filter(Boolean).join(' · ')}</small>}
+          {(row.ip_isp || row.ip_usage) && <small style={{ fontSize: 12, color: 'var(--v2b-text-muted, #666)', ...NOWRAP }}>{[row.ip_isp, row.ip_usage].filter(Boolean).join(' · ')}</small>}
         </>
       ),
     },
@@ -161,7 +180,7 @@ export function eventColumns({
       key: 'ua',
       render: (ua: string | null, row) =>
         isMergedBucket(row) ? (
-          <span style={MUTED}>{UA_MERGED}</span>
+          <span style={{ fontSize: 12, color: 'var(--v2b-text-muted, #666)' }}>{UA_MERGED}</span>
         ) : (
           <Ellipsis text={ua} width={260} empty={row.ua_hash === '' ? UA_EMPTY : UA_UNKNOWN} />
         ),
@@ -210,9 +229,9 @@ export function Ellipsis({
 export function NodeLabel({ type, id, name }: { type: string; id: number; name?: string | null }) {
   return (
     <span>
-      <Tag style={{ marginRight: 6 }}>{typeBadge(type)}</Tag>
+      <Tag style={{ marginRight: SPACING.sm }}>{typeBadge(type)}</Tag>
       {name ? `${name} ` : ''}
-      <span style={MUTED}>#{id}</span>
+      <span style={{ fontSize: 12, color: 'var(--v2b-text-muted, #666)' }}>#{id}</span>
     </span>
   )
 }
@@ -230,14 +249,14 @@ export function Section({ title, extra, children }: SectionProps) {
   return (
     <div>
       {(title || extra) && (
-        <div className="d-flex align-items-center flex-wrap" style={{ gap: 8, marginBottom: 12 }}>
+        <div className="d-flex align-items-center flex-wrap" style={{ gap: SPACING.sm, marginBottom: SPACING.md }}>
           {title && (
-            <h3 className="block-title" style={{ fontSize: 15 }}>
+            <h3 className="block-title" style={{ fontSize: 15, fontWeight: 500 }}>
               {title}
             </h3>
           )}
           {extra && (
-            <div className="d-flex align-items-center flex-wrap" style={{ gap: 8 }}>
+            <div className="d-flex align-items-center flex-wrap" style={{ gap: SPACING.sm }}>
               {extra}
             </div>
           )}
@@ -250,5 +269,5 @@ export function Section({ title, extra, children }: SectionProps) {
 
 /** 分区里的小表格：紧凑、默认不分页 */
 export function SubTable<T extends object>(props: TableProps<T>) {
-  return <V2Table<T> size="small" pagination={false} style={{ marginBottom: 16 }} {...props} />
+  return <V2Table<T> size="small" pagination={false} style={{ marginBottom: SPACING.lg }} {...props} />
 }

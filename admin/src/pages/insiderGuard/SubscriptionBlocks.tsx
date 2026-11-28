@@ -4,12 +4,14 @@ import { useState } from 'react'
 import { ApiError, get } from '@/api/request'
 import { adminPath } from '@/app/settings'
 import { formatTime } from '@/utils/format'
-import { Failed, Section, SubTable } from './shared'
+import { Ellipsis, Failed, Section, SubTable, userLabel } from './shared'
 
 interface Block {
   id: number
   ip_address: string
   ip_location: string | null
+  user_id: number | null
+  email: string | null
   reason: string
   status: number
   times: number
@@ -31,10 +33,11 @@ function reasonLabel(reason: string): string {
 
 const columns: TableColumnsType<Block> = [
   { title: '最近拦截时间', dataIndex: 'last_at', width: 170, render: (value: number) => formatTime(value, 'YYYY-MM-DD HH:mm:ss') },
-  { title: 'IP', dataIndex: 'ip_address', width: 170 },
+  { title: '用户', key: 'user', width: 200, render: (_: unknown, row) => row.user_id ? userLabel(row.email, row.user_id) : '-' },
+  { title: 'IP', dataIndex: 'ip_address', width: 150 },
   { title: '归属地', dataIndex: 'ip_location', width: 140, render: (value: string | null) => value || '未知' },
   { title: '拦截原因', dataIndex: 'reason', width: 175, render: reasonLabel },
-  { title: 'UA', dataIndex: 'ua', ellipsis: true },
+  { title: 'UA', dataIndex: 'ua', render: (ua: string) => <Ellipsis text={ua} width={300} /> },
   { title: '状态码', dataIndex: 'status', width: 80 },
   { title: '次数', dataIndex: 'times', width: 75 },
 ]

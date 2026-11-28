@@ -14,6 +14,7 @@ use App\Services\InsiderGuardService;
 use App\Services\LumiSubscribeService;
 use App\Services\ServerService;
 use App\Services\SubscribeDisplayService;
+use App\Services\SubscribeFilterService;
 use App\Services\SubscriptionNotice;
 use App\Services\UserService;
 use App\Utils\Helper;
@@ -55,8 +56,8 @@ class ClientController extends Controller
         $user = $request->user;
         if ($notice === null) {
             $servers = (new ServerService())->getAvailableServers($user);
-            $this->applyDomainRewriteRules($servers, $flag);
-            $this->applyNodeWhitelistRules($servers, $flag);
+            SubscribeFilterService::applyDomainRewriteRules($servers, $flag);
+            SubscribeFilterService::applyNodeWhitelistRules($servers, $flag);
             InsiderGuardService::recordSubscribe($user, $request, $servers);
         } else {
             $user = clone $user;
@@ -136,70 +137,6 @@ class ClientController extends Controller
         }
     }
 
-    private function applyDomainRewriteRules(&$servers, $ua)
-    {
-        $rules = config('v2board.subscribe_domain_rewrite_rules', []);
-        if (empty($rules) || empty($ua)) return;
-
-        $matchedRules = [];
-        foreach ($rules as $rule) {
-            if (empty($rule['ua']) || empty($rule['domain']) || empty($rule['ip'])) continue;
-            if (stripos($ua, $rule['ua']) !== false) {
-                $matchedRules[] = $rule;
-            }
-        }
-        if (empty($matchedRules)) return;
-
-        $addressFields = ['host', 'server', 'address'];
-        foreach ($servers as &$server) {
-            foreach ($matchedRules as $rule) {
-                foreach ($addressFields as $field) {
-                    if (isset($server[$field]) && strtolower($server[$field]) === strtolower($rule['domain'])) {
-                        $server[$field] = $rule['ip'];
-                    }
-                }
-            }
-        }
-        unset($server);
-    }
-
-    private function applyNodeWhitelistRules(&$servers, $ua)
-    {
-        $rules = config('v2board.subscribe_node_whitelist_rules', []);
-        if (empty($rules) || !is_array($rules)) return;
-
-        // Build map: "type:id" => [allowed UA keyword, ...]
-        $restricted = [];
-        foreach ($rules as $rule) {
-            if (!is_array($rule)) continue;
-            $ruleUa = isset($rule['ua']) ? trim((string)$rule['ua']) : '';
-            if ($ruleUa === '') continue;
-            if (empty($rule['nodes']) || !is_array($rule['nodes'])) continue;
-            foreach ($rule['nodes'] as $node) {
-                if (!is_array($node) || empty($node['type']) || !isset($node['id'])) continue;
-                $key = $node['type'] . ':' . (int)$node['id'];
-                $restricted[$key][] = $ruleUa;
-            }
-        }
-        if (empty($restricted)) return;
-
-        $servers = array_values(array_filter($servers, function ($server) use ($restricted, $ua) {
-            $key = ($server['type'] ?? '') . ':' . (isset($server['id']) ? (int)$server['id'] : '');
-            if (!isset($restricted[$key])) {
-                return true;
-            }
-            if (empty($ua)) {
-                return false;
-            }
-            foreach ($restricted[$key] as $allowedUa) {
-                if ($allowedUa === '') continue;
-                if (stripos($ua, $allowedUa) !== false) {
-                    return true;
-                }
-            }
-            return false;
-        }));
-    }
 
     private function setSubscribeInfoToServers(&$servers, $user)
     {

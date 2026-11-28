@@ -8,7 +8,10 @@ import { fetchConfig, saveConfig } from '@/api/services/config'
 import { message } from '@/app/staticApi'
 import { Loading } from '@/components/Loading'
 import { useGeoIpStatus } from './GeoIpPanel'
-import { Failed, guardKeys, MUTED, Note, Section } from './shared'
+import { Failed, guardKeys, MUTED, Note, Section, SPACING } from './shared'
+import { mockGuardConfig } from './mockData'
+
+const USE_MOCK = import.meta.env.DEV
 
 const CLOUD_LABELS: Record<string, string> = {
   aliyun: '阿里云', tencent: '腾讯云', huawei: '华为云', bytedance: '火山引擎', baidu: '百度智能云',
@@ -109,32 +112,32 @@ function ClientIpProbe({ onPick }: { onPick: (name: string) => void }) {
   })
   const data = probe.data
   return (
-    <div style={{ padding: '12px 0', borderBottom: '1px solid var(--v2b-line-soft, #eee)' }}>
+    <div style={{ padding: 20, borderBottom: '1px solid var(--v2b-line-soft, #eee)' }}>
       <Button size="small" loading={probe.isFetching} onClick={() => void probe.refetch()}>
         检测我这次请求带的访客 IP 请求头
       </Button>
-      {probe.isError && <Note style={{ marginTop: 8 }}>检测失败，请确认面板已更新到最新版本</Note>}
+      {probe.isError && <Note style={{ marginTop: SPACING.sm }}>检测失败，请确认面板已更新到最新版本</Note>}
       {data && (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: SPACING.sm }}>
           <Note>
             源站看到的来源地址：{data.peer || '-'}；面板当前采用的访客 IP：{data.current || '-'}。
             下面哪一行的 IP 是你自己的出口 IP，就用哪一行。
           </Note>
           {data.headers.length === 0 ? (
-            <Note style={{ marginTop: 6 }}>没有检测到常见的访客 IP 请求头，需要在 CDN 里开启回源携带客户端 IP。</Note>
+            <Note style={{ marginTop: SPACING.sm }}>没有检测到常见的访客 IP 请求头，需要在 CDN 里开启回源携带客户端 IP。</Note>
           ) : (
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'max-content max-content max-content',
                 alignItems: 'center',
-                gap: '6px 16px',
-                marginTop: 8,
+                gap: `${SPACING.sm}px ${SPACING.lg}px`,
+                marginTop: SPACING.sm,
                 overflowX: 'auto',
               }}
             >
               {data.headers.map((h) => [
-                <span key={h.name + ':n'} style={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{h.name}</span>,
+                <code key={h.name + ':n'} style={{ whiteSpace: 'nowrap' }}>{h.name}</code>,
                 <span key={h.name + ':v'} style={{ whiteSpace: 'nowrap' }}>{h.value}</span>,
                 <Button key={h.name + ':b'} size="small" disabled={!h.ip} onClick={() => onPick(h.name)}>
                   使用
@@ -150,18 +153,18 @@ function ClientIpProbe({ onPick }: { onPick: (name: string) => void }) {
 
 /** 输入框后面的单位 */
 function Unit({ children }: { children: ReactNode }) {
-  return <span style={{ ...MUTED, marginLeft: 8 }}>{children}</span>
+  return <span style={{ ...MUTED, marginLeft: SPACING.sm }}>{children}</span>
 }
 
-/** 一行设置：左边标题和说明，右边控件（与系统配置页同一种左文右控件的布局） */
+/** 一行设置：左边标题和说明，右边控件（与 SystemConfigPage 保持一致的布局） */
 function Row({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
-    <div className="row" style={{ padding: '16px 0', borderBottom: '1px solid var(--v2b-line-soft, #eee)' }}>
-      <div className="col-lg-8">
-        <div style={{ fontWeight: 'bold', marginBottom: 5 }}>{title}</div>
-        <div style={MUTED}>{description}</div>
+    <div className="row" style={{ padding: 20, borderBottom: '1px solid var(--v2b-line-soft, #eee)' }}>
+      <div className="col-lg-6">
+        <div style={{ fontWeight: 500, marginBottom: 5 }}>{title}</div>
+        <div style={{ ...MUTED, marginBottom: 5 }}>{description}</div>
       </div>
-      <div className="col-lg-4 text-right">{children}</div>
+      <div className="col-lg-6 text-right">{children}</div>
     </div>
   )
 }
@@ -169,7 +172,9 @@ function Row({ title, description, children }: { title: string; description: str
 export function GuardSettings() {
   const config = useQuery({
     queryKey: guardKeys.config,
-    queryFn: () => unwrap(fetchConfig('insider_guard')),
+    queryFn: USE_MOCK
+      ? async () => ({ insider_guard: mockGuardConfig })
+      : () => unwrap(fetchConfig('insider_guard')),
   })
   const retry = (
     <Button size="small" loading={config.isFetching} onClick={() => void config.refetch()}>
@@ -233,9 +238,9 @@ function SettingsForm({ initial, raw }: { initial: GuardConfig; raw?: Record<str
 
   return (
     <>
-      <h4 style={{ marginTop: 16 }}>订阅入口防护</h4>
+      <h4 style={{ marginTop: SPACING.lg, fontWeight: 500 }}>订阅入口防护</h4>
       {geoRulesEnabled && missingFamilies.length > 0 && (
-        <Note style={{ marginTop: 8 }}>
+        <Note style={{ marginTop: SPACING.sm }}>
           {missingFamilies.map((family) => family === 'ipv4' ? 'IPv4' : 'IPv6').join('、')} 本地 GeoIP 库尚未通过查询检查。
           云厂商规则依赖本地库。海外限制可用可信 Nginx 提供的地区代码，缺少地区代码时会拒绝请求。
         </Note>
@@ -263,7 +268,7 @@ function SettingsForm({ initial, raw }: { initial: GuardConfig; raw?: Record<str
           onChange={(value) => set('subscribe_ingress_cloud_providers', value)}
         />
       </Row>
-      <h4 style={{ marginTop: 24 }}>审计与账号处置</h4>
+      <h4 style={{ marginTop: SPACING.xl, fontWeight: 500 }}>审计与账号处置</h4>
       <Row
         title="高风险阈值"
         description="风险评分达到该值的账号标为高风险。当前评分规则最高 50 分（订阅次数、来源 IP 数各 25 分），默认 50"
@@ -316,7 +321,7 @@ function SettingsForm({ initial, raw }: { initial: GuardConfig; raw?: Record<str
         />
         <Unit>个周期</Unit>
       </Row>
-      <div style={{ padding: '16px 0' }}>
+      <div style={{ padding: 20 }}>
         <Button type="primary" loading={saving} onClick={() => void save()}>
           保存
         </Button>

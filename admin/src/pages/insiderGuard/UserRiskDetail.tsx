@@ -7,6 +7,8 @@ import { unwrap } from '@/api/request'
 import { fetchGuardDevices, fetchGuardUserDetail, resetGuardSubscription } from '@/api/services/insiderGuard'
 import type { GuardDevice, GuardEvent, GuardReview, GuardUserDetail } from '@/api/types'
 import { message } from '@/app/staticApi'
+import { get } from '@/api/request'
+import { adminPath } from '@/app/settings'
 import { Loading } from '@/components/Loading'
 import { ReviewModal } from './ReviewModal'
 import {
@@ -61,7 +63,7 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="pr-4 pr-sm-5" style={{ minWidth: 120 }}>
       <div style={MUTED}>{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 300 }}>{value}</div>
+      <div style={{ fontSize: 20, fontWeight: 400 }}>{value}</div>
     </div>
   )
 }
@@ -75,6 +77,7 @@ interface UserRiskDetailProps {
 
 export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProps) {
   const [draft, setDraft] = useState(initialUserId ? String(initialUserId) : '')
+  const [emailDraft, setEmailDraft] = useState('')
   const [userId, setUserId] = useState<number | undefined>(initialUserId)
 
   const detail = useQuery({
@@ -95,6 +98,26 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
     else setUserId(id)
   }
 
+  const searchByEmail = async () => {
+    const email = emailDraft.trim()
+    if (!email) {
+      message.error('请输入邮箱')
+      return
+    }
+    // 通过邮箱搜索用户
+    try {
+      const res = await get<{ user_id: number; email: string }>(adminPath('/user/search'), { email })
+      if (res.code !== 200 || !res.data) {
+        message.error('未找到该邮箱对应的用户')
+        return
+      }
+      setUserId(res.data.user_id)
+      setDraft(String(res.data.user_id))
+    } catch (error) {
+      message.error('查询失败，请重试')
+    }
+  }
+
   const data = detail.data
   return (
     <Section
@@ -108,6 +131,16 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') search()
+            }}
+          />
+          <Input
+            style={{ width: 200 }}
+            placeholder="或输入邮箱搜索"
+            allowClear
+            value={emailDraft}
+            onChange={(e) => setEmailDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') searchByEmail()
             }}
           />
           <Button type="primary" icon={<SearchOutlined />} loading={detail.isFetching} onClick={search}>
@@ -148,7 +181,7 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
           {detail.isError && !data && <Failed>查询失败：用户不存在或接口不可用</Failed>}
           {data && (
             <div style={{ paddingBottom: 16 }}>
-              <div className="d-flex flex-wrap align-items-center" style={{ gap: 12, marginBottom: 12 }}>
+              <div className="d-flex flex-wrap align-items-center" style={{ gap: SPACING.md, marginBottom: SPACING.md }}>
                 <span>
                   <span style={MUTED}>邮箱：</span>
                   {data.email}
@@ -166,15 +199,15 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
                 </span>
               </div>
               {data.restriction && (
-                <Note style={{ marginBottom: 12 }}>
+                <Note style={{ marginBottom: SPACING.md }}>
                   <div>
                     <strong>⚠️ 此用户的订阅已被限制</strong> · 限制于 {guardTime(data.restriction.created_at)} · 管理员 #{data.restriction.admin_id ?? '-'}
                   </div>
                   <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: 4 }}>原因：{data.restriction.reason}</div>
-                  <div style={{ marginTop: 8, color: '#666' }}>订阅与客户端配置请求已被限制，仅下发提示节点。如需解除，点击右上角「审核此用户」→ 选择「解除限制」</div>
+                  <div style={{ marginTop: SPACING.sm, color: '#666' }}>订阅与客户端配置请求已被限制，仅下发提示节点。如需解除，点击右上角「审核此用户」→ 选择「解除限制」</div>
                 </Note>
               )}
-              <div className="d-flex flex-wrap" style={{ marginBottom: 16 }}>
+              <div className="d-flex flex-wrap" style={{ marginBottom: SPACING.lg }}>
                 <Metric
                   label="评分（最近 1 小时）"
                   value={
@@ -186,16 +219,16 @@ export function UserRiskDetail({ initialUserId, onReviewed }: UserRiskDetailProp
                 <Metric label="需人工复核" value={data.risk.manual_review_required ? '是' : '否'} />
               </div>
               <DeviceList id={data.user_id} />
-              <div style={{ fontWeight: 'bold', marginBottom: 6 }}>最近事件</div>
+              <div style={{ fontWeight: 500, marginBottom: SPACING.sm }}>最近事件</div>
               <SubTable<GuardEvent> dataSource={data.events} columns={eventTableColumns} scroll={{ x: 1010 }} />
-              <div style={{ fontWeight: 'bold', marginBottom: 6 }}>被下发过的节点</div>
+              <div style={{ fontWeight: 500, marginBottom: SPACING.sm }}>被下发过的节点</div>
               <SubTable<Delivery>
                 rowKey={(row) => `${row.node_type}:${row.node_id}`}
                 dataSource={data.deliveries}
                 columns={deliveryColumns}
                 scroll={{ x: 690 }}
               />
-              <div style={{ fontWeight: 'bold', marginBottom: 6 }}>审核记录</div>
+              <div style={{ fontWeight: 500, marginBottom: SPACING.sm }}>审核记录</div>
               <SubTable<GuardReview>
                 dataSource={data.reviews}
                 columns={reviewColumns}
@@ -222,7 +255,7 @@ function DeviceList({ id }: { id: number }) {
   if (query.isError && !query.data) return <Failed>读取失败：设备信息暂时无法加载</Failed>
   return (
     <>
-      <div style={{ fontWeight: 'bold', marginBottom: 6 }}>活跃设备（最近 24 小时，按 UA 汇总）</div>
+      <div style={{ fontWeight: 500, marginBottom: SPACING.sm }}>活跃设备（最近 24 小时，按 UA 汇总）</div>
       <SubTable<GuardDevice> rowKey="ua_hash" loading={query.isLoading} dataSource={query.data ?? []} columns={columns} scroll={{ x: 760 }} />
     </>
   )

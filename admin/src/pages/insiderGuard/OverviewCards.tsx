@@ -1,8 +1,8 @@
 // 风控中心「概览」标签页顶部的统计卡片：近 24 小时事件、人工审核总数、限制中账号、所选时段内的高风险账号
 import type { ReactNode } from 'react'
-import type { GuardOverview } from '@/api/types'
+import type { GuardOverview, GuardRiskUser } from '@/api/types'
 import { Loading } from '@/components/Loading'
-import { Failed, MUTED } from './shared'
+import { Failed, SPACING } from './shared'
 
 interface OverviewCardsProps {
   overview?: GuardOverview
@@ -10,6 +10,8 @@ interface OverviewCardsProps {
   highRisk?: number
   /** 时段文案，显示在「高风险账号」卡片下方 */
   hoursText: string
+  /** Top 订阅用户列表 */
+  topUsers?: GuardRiskUser[]
   loading?: boolean
   /** 概览请求失败（卡片显示 -，并给出提示） */
   failed?: boolean
@@ -23,7 +25,7 @@ function Card({ icon, label, value, hint }: { icon: string; label: string; value
           <i className={`fa ${icon} fa-2x text-gray-light float-right`} />
           <div className="text-muted mb-1">{label}</div>
           <div className="display-4 text-black font-w300">{value}</div>
-          {hint && <div style={MUTED}>{hint}</div>}
+          {hint && <div style={{ fontSize: 12, color: 'var(--v2b-text-muted, #666)' }}>{hint}</div>}
         </div>
       </div>
     </div>
@@ -33,7 +35,7 @@ function Card({ icon, label, value, hint }: { icon: string; label: string; value
 /** 还没读取到时显示 - */
 const value = (n: number | undefined) => (n === undefined ? '-' : n)
 
-export function OverviewCards({ overview, highRisk, hoursText, loading, failed }: OverviewCardsProps) {
+export function OverviewCards({ overview, highRisk, hoursText, topUsers, loading, failed }: OverviewCardsProps) {
   return (
     <Loading loading={loading}>
       {/* 用网格排卡片：按宽度自动分列，手机 1 列 */}
@@ -41,8 +43,8 @@ export function OverviewCards({ overview, highRisk, hoursText, loading, failed }
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
-          gap: 14,
-          marginBottom: 14,
+          gap: SPACING.md,
+          marginBottom: SPACING.md,
         }}
       >
         <Card icon="fa-bolt" label="近 24 小时事件" value={value(overview?.recent_events)} hint="登录与订阅拉取" />
@@ -50,15 +52,64 @@ export function OverviewCards({ overview, highRisk, hoursText, loading, failed }
         <Card icon="fa-ban" label="限制中账号" value={value(overview?.restricted)} hint="禁止更新订阅" />
         <Card icon="fa-user-shield" label="高风险账号" value={value(highRisk)} hint={hoursText} />
       </div>
-      {!!overview?.top_ips?.length && <div className="table-responsive">
-        <h4>近 24 小时订阅来源 IP</h4>
-        <table className="table table-striped">
-          <thead><tr><th>IP</th><th>地区</th><th>运营商</th><th>请求数</th></tr></thead>
-          <tbody>{overview.top_ips.map((row) => (
-            <tr key={row.ip_address}><td>{row.ip_address}</td><td>{row.ip_location || '未知'}</td><td>{row.ip_isp || '-'}</td><td>{row.requests}</td></tr>
-          ))}</tbody>
-        </table>
-      </div>}
+      {!!overview?.top_ips?.length && (
+        <>
+          <h4>近 24 小时订阅来源 IP</h4>
+          <div className="table-responsive">
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                  <th>IP</th>
+                  <th>地区</th>
+                  <th>运营商</th>
+                  <th>请求数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overview.top_ips.map((row) => (
+                  <tr key={row.ip_address}>
+                    <td>{row.ip_address}</td>
+                    <td>{row.ip_location || '未知'}</td>
+                    <td>{row.ip_isp || '-'}</td>
+                    <td>{row.requests}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {topUsers && topUsers.length > 0 && (
+        <>
+          <h4 style={{ marginTop: SPACING.lg }}>高频订阅用户（{hoursText}）</h4>
+          <div className="table-responsive">
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                  <th>用户</th>
+                  <th>订阅次数</th>
+                  <th>IP 数</th>
+                  <th>评分</th>
+                  <th>最近 UA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topUsers.slice(0, 10).map((user) => (
+                  <tr key={user.user_id}>
+                    <td>{user.email || `#${user.user_id}`}</td>
+                    <td>{user.pulls}</td>
+                    <td>{user.ips}</td>
+                    <td>{user.score}</td>
+                    <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user.ua || '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
       {failed && <Failed>读取失败：统计数据暂时无法加载，请刷新页面重试</Failed>}
     </Loading>
   )

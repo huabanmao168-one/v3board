@@ -5,6 +5,7 @@ namespace App\Http\Controllers\V1\Client;
 use App\Http\Controllers\Controller;
 use App\Services\InsiderGuardService;
 use App\Services\ServerService;
+use App\Services\SubscribeFilterService;
 use App\Services\SubscriptionNotice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -27,6 +28,9 @@ class AppController extends Controller
         }
         if ($notice === null) {
             $servers = (new ServerService())->getAvailableServers($user);
+            $userAgent = (string) $request->userAgent();
+            SubscribeFilterService::applyDomainRewriteRules($servers, $userAgent);
+            SubscribeFilterService::applyNodeWhitelistRules($servers, $userAgent);
         } else {
             $user = clone $user;
             $user->uuid = SubscriptionNotice::PASSWORD;

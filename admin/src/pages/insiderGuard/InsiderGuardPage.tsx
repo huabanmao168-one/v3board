@@ -23,6 +23,9 @@ import { Whitelist } from './Whitelist'
 import { RiskUsers } from './RiskUsers'
 import { guardKeys, hoursLabel, Note, useGuardUsers } from './shared'
 import { UserRiskDetail } from './UserRiskDetail'
+import { mockOverview } from './mockData'
+
+const USE_MOCK = import.meta.env.DEV
 
 type TabKey = 'overview' | 'restricted' | 'watched' | 'whitelist' | 'events' | 'blocks' | 'detail' | 'geoip' | 'settings'
 
@@ -39,7 +42,10 @@ export default function InsiderGuardPage() {
   const [detailTarget, setDetailTarget] = useState<{ seq: number; userId?: number }>({ seq: 0 })
 
   const queryClient = useQueryClient()
-  const overview = useQuery({ queryKey: guardKeys.overview, queryFn: () => unwrap(fetchGuardOverview()) })
+  const overview = useQuery({
+    queryKey: guardKeys.overview,
+    queryFn: USE_MOCK ? async () => mockOverview : () => unwrap(fetchGuardOverview()),
+  })
   const refetchOverview = useRefetch(guardKeys.overview)
   // 前缀匹配：当前查询中的任何用户详情都重新拉取
   const refetchUserDetail = useRefetch(guardKeys.userDetail)
@@ -47,6 +53,9 @@ export default function InsiderGuardPage() {
   const refetchWatched = useRefetch(guardKeys.watched)
   const users = useGuardUsers(hours)
   const highRisk = users.data ? users.data.filter((u) => u.high_risk).length : undefined
+
+  // 按订阅次数排序的Top用户（不考虑风险评分）
+  const topUsers = users.data ? [...users.data].sort((a, b) => b.pulls - a.pulls) : undefined
 
   const showDetail = (userId: number) => {
     setDetailTarget((target) => ({ seq: target.seq + 1, userId }))
@@ -71,6 +80,7 @@ export default function InsiderGuardPage() {
             overview={overview.data}
             highRisk={highRisk}
             hoursText={hoursLabel(hours)}
+            topUsers={topUsers}
             loading={overview.isLoading}
             failed={overview.isError}
           />

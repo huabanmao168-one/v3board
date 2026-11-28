@@ -11,9 +11,9 @@ import {
   guardTime,
   HOURS_OPTIONS,
   hoursLabel,
-  MUTED,
   Note,
   Section,
+  SPACING,
   SubTable,
   UA_EMPTY,
   useGuardUsers,
@@ -40,9 +40,9 @@ export function RiskUsers({ hours, onHoursChange, onDetail, onReviewed }: RiskUs
       key: 'email',
       render: (email: string | null, row) => (
         <>
-          {email || <span style={MUTED}>已删除</span>}
+          {email || <span style={{ fontSize: 12, color: 'var(--v2b-text-muted, #666)' }}>已删除</span>}
           {row.restricted && (
-            <Tag color="red" style={{ marginLeft: 6 }}>
+            <Tag color="red" style={{ marginLeft: SPACING.sm }}>
               已限制
             </Tag>
           )}
@@ -70,7 +70,7 @@ export function RiskUsers({ hours, onHoursChange, onDetail, onReviewed }: RiskUs
       key: 'action',
       width: 180,
       render: (_: unknown, row) => (
-        <div className="d-flex" style={{ gap: 8 }}>
+        <div className="d-flex" style={{ gap: SPACING.sm }}>
           <Button size="small" onClick={() => onDetail(row.user_id)}>
             详情
           </Button>
@@ -116,10 +116,10 @@ export function RiskUsers({ hours, onHoursChange, onDetail, onReviewed }: RiskUs
           columns={columns}
           scroll={{ x: 900 }}
           pagination={{ ...paginationProps(ui), defaultPageSize: 20, hideOnSinglePage: true }}
-          style={{ marginBottom: 8 }}
+          style={{ marginBottom: SPACING.sm }}
         />
       )}
-      <Note style={{ marginBottom: 16 }}>当前评分只覆盖订阅次数和来源 IP 数；不能证明用户恶意行为。</Note>
+      <Note style={{ marginBottom: SPACING.lg }}>当前评分只覆盖订阅次数和来源 IP 数；不能证明用户恶意行为。</Note>
     </Section>
   )
 }

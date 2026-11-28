@@ -9,7 +9,7 @@ import type { GuardWatchedUser } from '@/api/types'
 import { paginationProps } from '@/hooks/usePagedList'
 import { useUi } from '@/stores/appearance'
 import { ReviewModal } from './ReviewModal'
-import { Ellipsis, Failed, guardKeys, guardTime, Note, parseUserId, Section, SubTable, userLabel } from './shared'
+import { Ellipsis, Failed, guardKeys, guardTime, Note, parseUserId, Section, SPACING, SubTable, userLabel } from './shared'
 
 interface WatchedUsersProps {
   /** 「详情」：切到「用户详情」标签页查询该用户 */
@@ -69,7 +69,7 @@ export function WatchedUsers({ onDetail, onReviewed }: WatchedUsersProps) {
       key: 'action',
       width: 170,
       render: (_: unknown, row) => (
-        <div className="d-flex" style={{ gap: 8 }}>
+        <div className="d-flex" style={{ gap: SPACING.sm }}>
           <Button size="small" onClick={() => onDetail(row.user_id)}>
             详情
           </Button>
@@ -95,7 +95,7 @@ export function WatchedUsers({ onDetail, onReviewed }: WatchedUsersProps) {
   return (
     <Section
       extra={
-        <div className="d-flex" style={{ gap: 8 }}>
+        <div className="d-flex" style={{ gap: SPACING.sm }}>
           <Input
             style={{ width: 120 }}
             placeholder="用户 ID"
@@ -130,7 +130,7 @@ export function WatchedUsers({ onDetail, onReviewed }: WatchedUsersProps) {
         </div>
       }
     >
-      <Note style={{ marginBottom: 12 }}>
+      <Note style={{ marginBottom: SPACING.md }}>
         被标记「持续观察」的账号会在此列出（不含已被限制的账号）。显示最近一次标记观察的记录和当前风险评分。
       </Note>
       {query.isError && !query.data ? (

@@ -9,7 +9,7 @@ import type { GuardWhitelistUser } from '@/api/types'
 import { message } from '@/app/staticApi'
 import { paginationProps } from '@/hooks/usePagedList'
 import { useUi } from '@/stores/appearance'
-import { Ellipsis, Failed, guardTime, Note, parseUserId, Section, SubTable, userLabel } from './shared'
+import { Ellipsis, Failed, guardTime, Note, parseUserId, Section, SPACING, SubTable, userLabel } from './shared'
 
 interface WhitelistProps {
   /** 加入 / 移出成功后刷新风险用户表与用户详情 */
@@ -98,7 +98,7 @@ export function Whitelist({ onChanged }: WhitelistProps) {
         </>
       }
     >
-      <Note style={{ marginBottom: 12 }}>
+      <Note style={{ marginBottom: SPACING.md }}>
         白名单账号不会出现在高风险列表，也不会被自动处置，用于已确认的多设备自用或共享出口用户。
       </Note>
       {query.isError && !query.data ? (

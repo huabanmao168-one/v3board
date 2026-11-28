@@ -4,7 +4,7 @@ import { ReloadOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { get, unwrap } from '@/api/request'
 import { adminPath } from '@/app/settings'
-import { Note, Section } from './shared'
+import { Note, Section, SPACING } from './shared'
 
 const endpoint = adminPath('/insiderGuard/geoIp')
 type DatabaseStatus = 'ready' | 'missing' | 'unreadable' | 'invalid' | 'wrong_family' | 'probe_failed'
@@ -47,10 +47,10 @@ export function GeoIpPanel() {
   return (
     <Section>
       <h4>GeoIP 数据库</h4>
-      <Note style={{ marginBottom: 12 }}>
+      <Note style={{ marginBottom: SPACING.md }}>
         数据库文件放在站点根目录下的 <code>storage/app/geoip/</code>：IPv4 文件名 <code>ip2region_v4.xdb</code>，IPv6 文件名 <code>ip2region_v6.xdb</code>，并确保 PHP 进程可读。优先选带区县和 IP 用途的满载版，精简版只提供文件内已有的字段。
       </Note>
-      <div className="d-flex align-items-center" style={{ gap: 12, marginBottom: 16 }}>
+      <div className="d-flex align-items-center" style={{ gap: SPACING.md, marginBottom: SPACING.lg }}>
         {status.data ? <p className="mb-0">IPv4 {statusLabel[status.data.ipv4]} · IPv6 {statusLabel[status.data.ipv6]}</p> : <p className="mb-0">{status.isError ? '读取数据库状态失败' : '正在读取数据库状态'}</p>}
         <Button icon={<ReloadOutlined />} loading={status.isFetching} onClick={() => void status.refetch()} size="small">刷新</Button>
       </div>

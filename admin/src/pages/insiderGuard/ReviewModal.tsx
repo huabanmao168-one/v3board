@@ -9,7 +9,7 @@ import { releaseGuardUser, restrictGuardUser, saveGuardReview } from '@/api/serv
 import type { GuardReviewAction } from '@/api/types'
 import { message } from '@/app/staticApi'
 import { FormGroup } from '@/components/FormGroup'
-import { MUTED, Note, REVIEW_ACTION_TEXT, userLabel } from './shared'
+import { Note, REVIEW_ACTION_TEXT, SPACING, userLabel } from './shared'
 
 const ACTIONS: GuardReviewAction[] = ['watch', 'clear', 'restrict_recommended', 'restrict', 'release']
 const ACTION_OPTIONS = ACTIONS.map((value) => ({ value, label: REVIEW_ACTION_TEXT[value] }))
@@ -117,13 +117,13 @@ export function ReviewModal({ user, onSaved, children }: ReviewModalProps) {
         <FormGroup label="用户">
           <div>
             {userLabel(user.email, user.id)}
-            {user.email && <span style={MUTED}> #{user.id}</span>}
+            {user.email && <span style={{ fontSize: 12, color: 'var(--v2b-text-muted, #666)' }}> #{user.id}</span>}
             {user.restricted ? (
-              <Tag color="red" style={{ marginLeft: 8 }}>
+              <Tag color="red" style={{ marginLeft: SPACING.sm }}>
                 已限制
               </Tag>
             ) : (
-              <Tag style={{ marginLeft: 8 }}>未限制</Tag>
+              <Tag style={{ marginLeft: SPACING.sm }}>未限制</Tag>
             )}
           </div>
           {user.summary && <Note>{user.summary}</Note>}
@@ -142,7 +142,7 @@ export function ReviewModal({ user, onSaved, children }: ReviewModalProps) {
           </div>
         </FormGroup>
         {action === 'restrict' && (
-          <div className="alert alert-warning" role="alert" style={{ marginBottom: 16 }}>
+          <div className="alert alert-warning" role="alert" style={{ marginBottom: SPACING.lg }}>
             <p className="mb-2">
               限制后，订阅和客户端配置仅显示一条限制提示节点。用户仍可登录面板，解除限制后可继续更新订阅。
             </p>
@@ -152,7 +152,7 @@ export function ReviewModal({ user, onSaved, children }: ReviewModalProps) {
           </div>
         )}
         {action === 'restrict' && user.restricted && (
-          <Note style={{ marginBottom: 16 }}>该用户已处于限制中，这次只会更新原因并再记一条审核记录。</Note>
+          <Note style={{ marginBottom: SPACING.lg }}>该用户已处于限制中，这次只会更新原因并再记一条审核记录。</Note>
         )}
         <FormGroup label="原因">
           <Input.TextArea
